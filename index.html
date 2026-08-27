@@ -1734,10 +1734,13 @@ function colabHistory(){
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(state.user.nome,inPeriod);
   const rows=d.rows.length
-    ? d.rows.map(r=>`<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
+    ? d.rows.map(r=>r.ferias
+        ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td></tr>`
+        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
         <td>${r.entrada}</td><td>${r.saida}</td>
         <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`).join('')
+        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
+      ).join('')
     : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
   return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
     `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>
@@ -1863,7 +1866,7 @@ function collectPonto(empName,keep){
   const previstaWeekday=Math.max(0,(parseHM(jw[1]||'17:00')-parseHM(jw[0]||'08:00'))/60000-almocoOverlapMin(hmToMin(jw[0]||'08:00'),hmToMin(jw[1]||'17:00')));
   const js=((empObj&&empObj.jornadaSab)||'08:00–12:00').split(/[–-]/).map(s=>s.trim());
   const previstaSab=Math.max(0,(parseHM(js[1]||'12:00')-parseHM(js[0]||'08:00'))/60000-almocoOverlapMin(hmToMin(js[0]||'08:00'),hmToMin(js[1]||'12:00')));
-  const ensure=d=>{if(!days[d])days[d]={entrada:null,saida:null,adj:false};return days[d];};
+  const ensure=d=>{if(!days[d])days[d]={entrada:null,saida:null,adj:false,ferias:false};return days[d];};
   // Se por algum motivo existir mais de um registro do mesmo tipo no mesmo dia (ex.: lançamento
   // manual repetido), escolhe de forma DETERMINÍSTICA em vez de depender da ordem do array:
   // prioriza o que já foi ajustado e, empatando, o mais recente (campo "at").
@@ -1889,10 +1892,28 @@ function collectPonto(empName,keep){
     else if(a.tipo==='Saída')day.saida=a.para;
     day.adj=true;
   });
+  // Dias de férias aprovadas também entram no ponto do período, marcados como "Férias" — pedido
+  // do administrador: se o colaborador saiu de férias, esses dias precisam aparecer destacados
+  // como férias (na folha, na impressão e no histórico), em vez de ficarem em branco. Só marca o
+  // dia como férias quando NÃO há nenhum registro real batido nele — se por algum motivo houver
+  // um ponto no meio do período de férias, ele continua aparecendo normalmente, sem esconder nada.
+  (state.vacations||[]).filter(v=>v.emp===empName&&v.status==='agendada'&&v.ini&&v.fim).forEach(v=>{
+    let cur=new Date(v.ini+'T12:00:00');
+    const fim=new Date(v.fim+'T12:00:00');
+    while(cur<=fim){
+      const dk=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
+      if(dk<=tkMax&&keep(dk)&&!days[dk])ensure(dk).ferias=true;
+      cur.setDate(cur.getDate()+1);
+    }
+  });
   const dias=Object.keys(days).sort();
   const rows=[]; let jantas=0, extraTotalMin=0;
   dias.forEach(d=>{
     const day=days[d];
+    if(day.ferias){
+      rows.push({data:d,entrada:'—',saida:'—',total:'Férias',extraMin:0,extra:'—',janta:false,ajustado:false,ferias:true});
+      return;
+    }
     const jantou=!!(day.saida&&day.saida>'18:59'); if(jantou)jantas++;
     let total='—', extraMin=0;
     if(day.entrada&&day.saida){
@@ -1909,7 +1930,7 @@ function collectPonto(empName,keep){
     }
     rows.push({data:d,entrada:day.entrada||'—',saida:day.saida||'—',total,extraMin,extra:extraMin>0?fmtMin(extraMin):'—',janta:jantou,ajustado:day.adj});
   });
-  return {rows,jantas,dias:dias.length,extraTotalMin,extraTotal:fmtMin(extraTotalMin)};
+  return {rows,jantas,dias:dias.length,extraTotalMin,extraTotal:fmtMin(extraTotalMin),feriasDias:rows.filter(r=>r.ferias).length};
 }
 function pontoMonthData(empName,ym){return collectPonto(empName,d=>d.startsWith(ym));}
 // Período (16 a 15, igual ao resto do sistema — fechamento, espelho, visão do Admin) que o
@@ -1928,7 +1949,10 @@ function colabAcompanhar(){
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(state.user.nome,inPeriod);
   const rows=d.rows.length
-    ? d.rows.map(r=>`<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`).join('')
+    ? d.rows.map(r=>r.ferias
+        ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>`
+        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
+      ).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   return `${head('Acompanhar Ponto','Acompanhe todos os seus lançamentos, horas extras e jantas dentro do período.')}
   <div class="card">
@@ -1940,7 +1964,7 @@ function colabAcompanhar(){
         <button class="btn sm ghost" onclick="myAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
@@ -1956,7 +1980,7 @@ function colabPontosAnteriores(){
     const d=collectPonto(nome,inPeriod);
     return `<div class="card" style="background:var(--surface-2);box-shadow:none;margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div><b>${periodLabel(b)}</b><br><small style="color:var(--muted)">${d.dias} dia(s) com ponto • 🍽️ ${d.jantas} janta(s)</small></div>
+        <div><b>${periodLabel(b)}</b><br><small style="color:var(--muted)">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • 🍽️ ${d.jantas} janta(s)</small></div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="badge b-good">🔒 Fechado</span>
           ${d.extraTotalMin>0?`<span class="badge b-warn">⚡ +${d.extraTotal}</span>`:''}
@@ -1975,11 +1999,14 @@ function verPontosAnterioresDetalhe(k){
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(nome,inPeriod);
   const rows=d.rows.length
-    ? d.rows.map(r=>`<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`).join('')
+    ? d.rows.map(r=>r.ferias
+        ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>`
+        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
+      ).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   openModal({wide:true,content:`<div class="modal-head"><h3>🗂️ ${periodLabel(b)}</h3></div>
   <div class="modal-body">
-    <div class="sub" style="margin-bottom:10px">${d.dias} dia(s) com ponto • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    <div class="sub" style="margin-bottom:10px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
@@ -2576,7 +2603,10 @@ function adminRegAcompanhar(){
   const d=collectPonto(state.acompEmp,inPeriod);
   const emp=state.employees.find(x=>x.nome===state.acompEmp);
   const rows=d.rows.length
-    ? d.rows.map(r=>`<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`).join('')
+    ? d.rows.map(r=>r.ferias
+        ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>`
+        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
+      ).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
@@ -2589,7 +2619,7 @@ function adminRegAcompanhar(){
         <button class="btn sm ghost" onclick="adminAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
+    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
@@ -2888,7 +2918,10 @@ function espelhoSection(x,bounds){
   const cargo=emp?[emp.setor,emp.funcao].filter(Boolean).join(' • '):'';
   const temAjuste=d.rows.some(r=>r.ajustado);
   const body=d.rows.length
-    ? d.rows.map(r=>`<tr><td>${fmtd(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaExt(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`).join('')
+    ? d.rows.map(r=>r.ferias
+        ? `<tr class="feriasrow"><td>${fmtd(r.data)}</td><td>${diaSemanaExt(r.data)}</td><td colspan="3" style="text-align:center">🏖️ Férias</td><td>—</td></tr>`
+        : `<tr><td>${fmtd(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaExt(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`
+      ).join('')
     : `<tr><td colspan="6" class="empty">Sem registros no período</td></tr>`;
   return `<section class="esp">
     <header class="esp-head">
@@ -2950,6 +2983,7 @@ function folhaDocHTML(inner){
     tbody td.hasextra{color:#a06a00;font-weight:700}
     tbody td.empty{text-align:center;color:#8a90a2;padding:18px}
     .adjmark{color:#1f3a68;font-weight:800}
+    tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
     tfoot .tot td{background:#e6ecf6;font-weight:800;font-size:12px;color:#14284d;padding:9px 10px;border-top:2px solid #1f3a68}
     .ass{display:flex;justify-content:space-around;gap:30px;margin-top:44px;font-size:11px;text-align:center;color:#3d4252}
     .ass .line{display:block;border-top:1px solid #8a90a2;margin-bottom:6px;padding-top:6px}

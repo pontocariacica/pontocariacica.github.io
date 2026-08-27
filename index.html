@@ -573,55 +573,90 @@ function initSupabase(){
       supaReady=true;
       flushSupabaseQueue();
       flushSupabaseDeleteQueue();
+      flushSupabaseSnapshot();
+      // Confere (e completa sozinho) qualquer lacuna entre o que existe aqui e o que está no
+      // Supabase — rede de segurança pra além da fila normal, ver reconcileSupabaseRegistros().
+      setTimeout(reconcileSupabaseRegistros,20000);
     }
   }catch(e){console.warn('Supabase indisponível:',e&&e.message);supaReady=false;}
 }
 function supaQueueGet(){try{return JSON.parse(localStorage.getItem('pontoapp_supabase_queue')||'[]');}catch(e){return [];}}
 function supaQueueSet(arr){try{localStorage.setItem('pontoapp_supabase_queue',JSON.stringify(arr));}catch(e){}}
-function supaQueuePush(row){const q=supaQueueGet();q.push(row);if(q.length>2000)q.splice(0,q.length-2000);supaQueueSet(q);}
+// Enfileira (ou atualiza, se já enfileirado) por reg_id — usado ANTES de tentar enviar, não só
+// quando o envio falha (ver sendRegistroToSupabase).
+function supaQueueUpsert(row){
+  const q=supaQueueGet();
+  const idx=q.findIndex(x=>x&&x.reg_id===row.reg_id);
+  if(idx>=0)q[idx]=row;else q.push(row);
+  if(q.length>2000)q.splice(0,q.length-2000);
+  supaQueueSet(q);
+}
+function supaQueueRemove(regId){
+  const q=supaQueueGet();
+  const next=q.filter(x=>!x||x.reg_id!==regId);
+  if(next.length!==q.length)supaQueueSet(next);
+}
 // Reenvia o que ficou preso na fila (falhas anteriores de rede/serviço). Cada item tem seu próprio
-// "reg_id" único, então reenviar não cria duplicata — upsert substitui se já existir.
+// "reg_id" único, então reenviar não cria duplicata — upsert substitui se já existir. Remove cada
+// item individualmente (em vez de sobrescrever a fila inteira no final) para não perder um item
+// novo que tenha entrado na fila enquanto este flush ainda estava rodando.
 async function flushSupabaseQueue(){
   if(!supaReady||!supa)return;
   const q=supaQueueGet();
   if(!q.length)return;
-  const rest=[];
   for(const row of q){
     try{
       const {error}=await supa.from('registros_ponto').upsert(row,{onConflict:'reg_id'});
-      if(error)rest.push(row);
-    }catch(e){rest.push(row);}
+      if(!error)supaQueueRemove(row.reg_id);
+    }catch(e){/* mantém na fila, tenta de novo depois */}
   }
-  supaQueueSet(rest);
 }
-// Envia UM ponto (entrada/saída) assim que é registrado — chamado direto de registrarPonto(),
-// em paralelo ao Firebase, sem esperar nem depender dele. Nunca lança erro pra fora: se falhar,
-// só enfileira pra tentar de novo depois.
-async function sendRegistroToSupabase(r){
+function supaRowFromRegistro(r){
   // registrado_em não pode ser nulo no Supabase — registros bem antigos (de antes desse campo
   // existir) não têm r.at; sem esse fallback, o envio falhava pra sempre (violação de not-null)
   // e ficava preso na fila de novo a cada tentativa, sem nunca conseguir ser gravado.
   const at=r.at||(r.data&&r.hora?new Date(r.data+'T'+r.hora+':00').toISOString():new Date().toISOString());
-  const row={
+  return{
     reg_id:String(r.id),emp:r.emp,data:r.data,tipo:r.tipo,hora:r.hora,
     lat:r.lat!=null?r.lat:null,lon:r.lon!=null?r.lon:null,cidade:r.cidade||null,estado:r.estado||null,
     endereco:r.addr||null,precisao:r.prec!=null?r.prec:null,ip:r.ip||null,disp:r.disp||null,
     janta:!!r.janta,registrado_em:at
   };
-  if(!supaReady||!supa){supaQueuePush(row);return;}
+}
+// Envia UM ponto (entrada/saída) assim que é registrado — chamado direto de registrarPonto(),
+// em paralelo ao Firebase, sem esperar nem depender dele. Nunca lança erro pra fora: se falhar,
+// fica na fila e tenta de novo depois.
+async function sendRegistroToSupabase(r){
+  const row=supaRowFromRegistro(r);
+  // Enfileira ANTES de tentar enviar: se a aba fechar, o app for para segundo plano ou a conexão
+  // cair bem no meio do envio, o registro já está salvo na fila local e é reenviado sozinho depois.
+  // Antes só entrava na fila quando o envio respondia com erro — uma tentativa interrompida no meio
+  // (não uma falha) não deixava rastro nenhum, e o registro nunca mais era reenviado sozinho.
+  supaQueueUpsert(row);
+  if(!supaReady||!supa)return;
   try{
     const {error}=await supa.from('registros_ponto').upsert(row,{onConflict:'reg_id'});
-    if(error){console.warn('Supabase (registro) falhou, enfileirado:',error.message);supaQueuePush(row);}
-  }catch(e){console.warn('Supabase (registro) falhou, enfileirado:',e&&e.message);supaQueuePush(row);}
+    if(error){console.warn('Supabase (registro) falhou, mantido na fila:',error.message);return;}
+    supaQueueRemove(row.reg_id);
+  }catch(e){console.warn('Supabase (registro) falhou, mantido na fila:',e&&e.message);}
 }
 // Envia uma cópia completa do estado (todos os colaboradores, ajustes, notificações etc.) sempre
 // que o app salva na nuvem — mantém no Supabase um espelho independente de tudo, não só dos pontos.
+// Guarda o último envio que falhou e tenta de novo sozinho (flushSupabaseSnapshot), em vez de só
+// esperar a próxima mudança de estado pra tentar mandar uma cópia mais atual.
+let lastSnapshotData=null, snapshotRetryPending=false;
 async function sendSnapshotToSupabase(data){
-  if(!supaReady||!supa)return;
+  lastSnapshotData=data;
+  if(!supaReady||!supa){snapshotRetryPending=true;return;}
   try{
     const {error}=await supa.from('pontoapp_snapshot').upsert({id:1,dados:data,atualizado_em:new Date().toISOString()});
-    if(error)console.warn('Supabase (cópia completa) falhou:',error.message);
-  }catch(e){console.warn('Supabase (cópia completa) falhou:',e&&e.message);}
+    if(error){console.warn('Supabase (cópia completa) falhou, tenta de novo em breve:',error.message);snapshotRetryPending=true;return;}
+    snapshotRetryPending=false;
+  }catch(e){console.warn('Supabase (cópia completa) falhou, tenta de novo em breve:',e&&e.message);snapshotRetryPending=true;}
+}
+function flushSupabaseSnapshot(){
+  if(!supaReady||!supa||!snapshotRetryPending||!lastSnapshotData)return;
+  sendSnapshotToSupabase(lastSnapshotData);
 }
 // ===== Exclusão espelhada — pedido do administrador: "se no sistema o colaborador excluir o
 // ponto, no Supabase também tem que excluir" (confirmarExcluirRegistro() chama isso). Mesmo
@@ -630,31 +665,74 @@ async function sendSnapshotToSupabase(data){
 function supaDeleteQueueGet(){try{return JSON.parse(localStorage.getItem('pontoapp_supabase_delete_queue')||'[]');}catch(e){return [];}}
 function supaDeleteQueueSet(arr){try{localStorage.setItem('pontoapp_supabase_delete_queue',JSON.stringify(arr));}catch(e){}}
 function supaDeleteQueuePush(regId){const q=supaDeleteQueueGet();if(!q.includes(regId)){q.push(regId);if(q.length>2000)q.splice(0,q.length-2000);supaDeleteQueueSet(q);}}
+function supaDeleteQueueRemove(regId){
+  const q=supaDeleteQueueGet();
+  const next=q.filter(x=>x!==regId);
+  if(next.length!==q.length)supaDeleteQueueSet(next);
+}
 async function flushSupabaseDeleteQueue(){
   if(!supaReady||!supa)return;
   const q=supaDeleteQueueGet();
   if(!q.length)return;
-  const rest=[];
   for(const regId of q){
     try{
       const {error}=await supa.from('registros_ponto').delete().eq('reg_id',regId);
-      if(error)rest.push(regId);
-    }catch(e){rest.push(regId);}
+      if(!error)supaDeleteQueueRemove(regId);
+    }catch(e){/* mantém na fila, tenta de novo depois */}
   }
-  supaDeleteQueueSet(rest);
 }
 async function deleteRegistroFromSupabase(regId){
   regId=String(regId);
-  if(!supaReady||!supa){supaDeleteQueuePush(regId);return;}
+  supaDeleteQueuePush(regId);
+  if(!supaReady||!supa)return;
   try{
     const {error}=await supa.from('registros_ponto').delete().eq('reg_id',regId);
-    if(error){console.warn('Supabase (exclusão) falhou, enfileirada:',error.message);supaDeleteQueuePush(regId);}
-  }catch(e){console.warn('Supabase (exclusão) falhou, enfileirada:',e&&e.message);supaDeleteQueuePush(regId);}
+    if(error){console.warn('Supabase (exclusão) falhou, mantida na fila:',error.message);return;}
+    supaDeleteQueueRemove(regId);
+  }catch(e){console.warn('Supabase (exclusão) falhou, mantida na fila:',e&&e.message);}
+}
+// ===== Reconciliação periódica — rede de segurança final. Compara os registros que existem aqui
+// com os que existem no Supabase e completa sozinho qualquer lacuna (ex.: um envio que foi
+// interrompido de um jeito que nem chegou a cair na fila normal). Roda pouco depois de abrir o
+// app e depois a cada poucos minutos; só faz INSERT/UPSERT de registros que faltam — nunca apaga
+// nada aqui, então não tem risco de remover dado real por engano.
+async function fetchAllSupaRegIds(){
+  const ids=new Set();
+  let from=0;const pageSize=1000;
+  while(true){
+    const {data,error}=await supa.from('registros_ponto').select('reg_id').range(from,from+pageSize-1);
+    if(error||!data)break;
+    data.forEach(x=>ids.add(String(x.reg_id)));
+    if(data.length<pageSize)break;
+    from+=pageSize;
+    if(from>50000)break; // trava de segurança
+  }
+  return ids;
+}
+let reconcilingRegistros=false;
+async function reconcileSupabaseRegistros(){
+  if(!supaReady||!supa||reconcilingRegistros)return;
+  reconcilingRegistros=true;
+  try{
+    const supaIds=await fetchAllSupaRegIds();
+    const missing=(state.registros||[]).filter(r=>r&&r.id!=null&&!supaIds.has(String(r.id)));
+    if(missing.length){
+      const rows=missing.map(supaRowFromRegistro);
+      const {error}=await supa.from('registros_ponto').upsert(rows,{onConflict:'reg_id'});
+      if(error)console.warn('Reconciliação Supabase falhou:',error.message);
+      else console.info(`Reconciliação Supabase: ${rows.length} registro(s) completado(s).`);
+    }
+  }catch(e){console.warn('Reconciliação Supabase falhou:',e&&e.message);}
+  reconcilingRegistros=false;
 }
 try{window.addEventListener('online',flushSupabaseQueue);}catch(e){}
 try{window.addEventListener('online',flushSupabaseDeleteQueue);}catch(e){}
+try{window.addEventListener('online',flushSupabaseSnapshot);}catch(e){}
+try{window.addEventListener('online',reconcileSupabaseRegistros);}catch(e){}
 try{setInterval(flushSupabaseQueue,60000);}catch(e){}
 try{setInterval(flushSupabaseDeleteQueue,60000);}catch(e){}
+try{setInterval(flushSupabaseSnapshot,60000);}catch(e){}
+try{setInterval(reconcileSupabaseRegistros,5*60*1000);}catch(e){}
 
 const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';

@@ -2756,6 +2756,11 @@ function aplicarAjusteNoRegistro(a){
     const key=a.tipo==='Entrada'?'entrada':'saida';
     day[key]={time:a.para,manual:true,ajuste:true,ip:'—',info:{dev:'Ajuste',os:'Admin',br:'RH'},at:nowIso};
   }
+  // Espelho no Supabase: sem isso, uma correção aprovada só aparecia na cópia completa do
+  // estado (pontoapp_snapshot), não na tabela linha-a-linha de pontos (registros_ponto) — o
+  // upsert por reg_id corrige o horário se o registro já existia lá, ou cria a linha se o
+  // ponto foi lançado do zero a partir do ajuste (não tinha batida original nenhuma).
+  sendRegistroToSupabase(r);
 }
 function realizarAjuste(id){
   const a=state.adjustments.find(x=>x.id===id);

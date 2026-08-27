@@ -2267,11 +2267,14 @@ function submitVacation(){
   state.vacations.push({id:Date.now(),_ts:Date.now(),emp:state.user.nome,ini,fim,dias,abono,obs,status:'pendente'});
   state.logs.unshift({quem:state.user.nome,acao:'Solicitou férias',alvo:`${fmtd(ini)} a ${fmtd(fim)} • ${dias} dias`,ip:'201.9.88.3',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   pushNotif({for:'admin',ic:'🏖️',c:'var(--c1)',t:'Nova solicitação de férias',s:`${state.user.nome} • ${dias} dias (${fmtd(ini)} a ${fmtd(fim)})`});
-  closeModal();renderNav();render();toast('Férias solicitadas',`${dias} dias (${fmtd(ini)} a ${fmtd(fim)}) — enviado ao RH.`,'info');
+  // Grava na hora (não espera o debounce de scheduleSave() que roda no fim de render()) — sem
+  // isso, o pedido só ia pro banco "de carona" na próxima vez que algo disparasse um save, o que
+  // podia atrasar bastante o administrador ver a solicitação chegar.
+  closeModal();renderNav();saveNow();render();toast('Férias solicitadas',`${dias} dias (${fmtd(ini)} a ${fmtd(fim)}) — enviado ao RH.`,'info');
 }
 function cancelVacation(id){
   state.vacations=state.vacations.filter(v=>v.id!==id);
-  render();toast('Solicitação cancelada','Sua solicitação de férias foi removida.','err');
+  saveNow();render();toast('Solicitação cancelada','Sua solicitação de férias foi removida.','err');
 }
 function colabProfile(){
   const u=state.user;
@@ -3372,7 +3375,8 @@ function decideVacation(id,acao){
   pushNotif({for:'colab',ic:ok?'✅':'❌',c:ok?'var(--s-good)':'var(--s-crit)',
     t:ok?'Férias aprovadas':'Férias recusadas',s:`${fmtd(v.ini)} a ${fmtd(v.fim)} • ${v.dias} dias`});
   state.logs.unshift({quem:'Admin',acao:(ok?'Aprovou':'Recusou')+' férias',alvo:`${v.emp} • ${fmtd(v.ini)} a ${fmtd(v.fim)}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
-  renderNav();render();toast('Férias '+(ok?'aceitas':'recusadas'),v.emp+' foi notificado.','info');
+  // Mesmo motivo do submitVacation(): grava direto, sem depender do debounce de render().
+  renderNav();saveNow();render();toast('Férias '+(ok?'aceitas':'recusadas'),v.emp+' foi notificado.','info');
 }
 function openAdminVacationForm(){
   const opts=state.employees.map(e=>`<option>${e.nome}</option>`).join('');
@@ -3398,7 +3402,7 @@ function saveAdminVacation(){
   if(dias<1){toast('Erro','Selecione um período válido.','err');return;}
   state.vacations.push({id:Date.now(),_ts:Date.now(),emp,ini,fim,dias,abono,obs:'Cadastrada pelo admin',status:'agendada'});
   state.logs.unshift({quem:'Admin',acao:'Cadastrou férias',alvo:`${emp} • ${fmtd(ini)} a ${fmtd(fim)}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
-  closeModal();render();toast('Férias cadastradas',`${emp}: ${dias} dias.`,'info');
+  closeModal();saveNow();render();toast('Férias cadastradas',`${emp}: ${dias} dias.`,'info');
 }
 function openAtestadoForm(){
   const opts=state.employees.map(e=>`<option>${e.nome}</option>`).join('');

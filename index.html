@@ -526,6 +526,7 @@ function initSupabase(){
       supa=window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey);
       supaReady=true;
       flushSupabaseQueue();
+      flushSupabaseDeleteQueue();
     }
   }catch(e){console.warn('Supabase indisponível:',e&&e.message);supaReady=false;}
 }
@@ -572,8 +573,38 @@ async function sendSnapshotToSupabase(data){
     if(error)console.warn('Supabase (cópia completa) falhou:',error.message);
   }catch(e){console.warn('Supabase (cópia completa) falhou:',e&&e.message);}
 }
+// ===== Exclusão espelhada — pedido do administrador: "se no sistema o colaborador excluir o
+// ponto, no Supabase também tem que excluir" (confirmarExcluirRegistro() chama isso). Mesmo
+// padrão de fila local dos envios acima: se falhar (sem internet etc.), fica na fila e é
+// reenviado sozinho, então a exclusão nunca deixa de se propagar para o espelho.
+function supaDeleteQueueGet(){try{return JSON.parse(localStorage.getItem('pontoapp_supabase_delete_queue')||'[]');}catch(e){return [];}}
+function supaDeleteQueueSet(arr){try{localStorage.setItem('pontoapp_supabase_delete_queue',JSON.stringify(arr));}catch(e){}}
+function supaDeleteQueuePush(regId){const q=supaDeleteQueueGet();if(!q.includes(regId)){q.push(regId);if(q.length>2000)q.splice(0,q.length-2000);supaDeleteQueueSet(q);}}
+async function flushSupabaseDeleteQueue(){
+  if(!supaReady||!supa)return;
+  const q=supaDeleteQueueGet();
+  if(!q.length)return;
+  const rest=[];
+  for(const regId of q){
+    try{
+      const {error}=await supa.from('registros_ponto').delete().eq('reg_id',regId);
+      if(error)rest.push(regId);
+    }catch(e){rest.push(regId);}
+  }
+  supaDeleteQueueSet(rest);
+}
+async function deleteRegistroFromSupabase(regId){
+  regId=String(regId);
+  if(!supaReady||!supa){supaDeleteQueuePush(regId);return;}
+  try{
+    const {error}=await supa.from('registros_ponto').delete().eq('reg_id',regId);
+    if(error){console.warn('Supabase (exclusão) falhou, enfileirada:',error.message);supaDeleteQueuePush(regId);}
+  }catch(e){console.warn('Supabase (exclusão) falhou, enfileirada:',e&&e.message);supaDeleteQueuePush(regId);}
+}
 try{window.addEventListener('online',flushSupabaseQueue);}catch(e){}
+try{window.addEventListener('online',flushSupabaseDeleteQueue);}catch(e){}
 try{setInterval(flushSupabaseQueue,60000);}catch(e){}
+try{setInterval(flushSupabaseDeleteQueue,60000);}catch(e){}
 
 const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
@@ -2580,6 +2611,7 @@ function confirmarExcluirRegistro(i){
   const r=state.registros[i];
   if(!r){closeModal();return;}
   state.registros.splice(i,1);
+  deleteRegistroFromSupabase(r.id);
   if(!state.deletedKeys)state.deletedKeys=[];
   state.deletedKeys.push({k:'reg:'+regMergeKey(r),at:new Date().toISOString()});
   // Remove também da linha do tempo do colaborador (punchesByEmp)

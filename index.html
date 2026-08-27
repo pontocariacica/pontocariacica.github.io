@@ -22,6 +22,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<!-- ===== Supabase — cópia de segurança em dobro dos dados (além do Firebase) ===== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* ============================ TEMA / PALETA ============================ */
 :root{
@@ -502,6 +504,77 @@ const firebaseConfig = {
   appId: "1:859559207223:web:9f2d734f2fcf412e8b3ab2"
 };
 
+/* ==================================================================== */
+/* ===== SUPABASE — cópia de segurança em dobro (além do Firebase) ==== */
+/* ==================================================================== */
+/* Migração pedida pelo administrador: enquanto o Firebase continua sendo a fonte principal
+   (nada muda no funcionamento atual), TODO ponto registrado e TODA gravação no banco também
+   são enviadas em paralelo para o Supabase — sem bloquear, sem substituir e sem depender do
+   Firebase. Se o envio ao Supabase falhar (sem internet, serviço fora do ar etc.), o registro
+   fica numa fila local (localStorage) e é reenviado sozinho assim que a conexão voltar, então
+   nenhuma informação deixa de ser gravada lá por causa de uma falha momentânea de rede.
+   Usa só a "chave publicável" (anon key) — segura para uso no navegador, do mesmo jeito que a
+   apiKey do Firebase acima já é usada hoje. A chave secreta (service_role) nunca entra aqui. */
+const supabaseConfig = {
+  url: "https://wxkjobtcqjeisgzctcii.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4a2pvYnRjcWplaXNnemN0Y2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3ODcwMjksImV4cCI6MjEwMzM2MzAyOX0.0B1bfp0MbhsgJkJvGX7KIi13y-nq6rw4r8PYLr1wxz4"
+};
+let supa=null, supaReady=false;
+function initSupabase(){
+  try{
+    if(typeof window.supabase!=='undefined'&&supabaseConfig&&supabaseConfig.url&&supabaseConfig.anonKey){
+      supa=window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey);
+      supaReady=true;
+      flushSupabaseQueue();
+    }
+  }catch(e){console.warn('Supabase indisponível:',e&&e.message);supaReady=false;}
+}
+function supaQueueGet(){try{return JSON.parse(localStorage.getItem('pontoapp_supabase_queue')||'[]');}catch(e){return [];}}
+function supaQueueSet(arr){try{localStorage.setItem('pontoapp_supabase_queue',JSON.stringify(arr));}catch(e){}}
+function supaQueuePush(row){const q=supaQueueGet();q.push(row);if(q.length>2000)q.splice(0,q.length-2000);supaQueueSet(q);}
+// Reenvia o que ficou preso na fila (falhas anteriores de rede/serviço). Cada item tem seu próprio
+// "reg_id" único, então reenviar não cria duplicata — upsert substitui se já existir.
+async function flushSupabaseQueue(){
+  if(!supaReady||!supa)return;
+  const q=supaQueueGet();
+  if(!q.length)return;
+  const rest=[];
+  for(const row of q){
+    try{
+      const {error}=await supa.from('registros_ponto').upsert(row,{onConflict:'reg_id'});
+      if(error)rest.push(row);
+    }catch(e){rest.push(row);}
+  }
+  supaQueueSet(rest);
+}
+// Envia UM ponto (entrada/saída) assim que é registrado — chamado direto de registrarPonto(),
+// em paralelo ao Firebase, sem esperar nem depender dele. Nunca lança erro pra fora: se falhar,
+// só enfileira pra tentar de novo depois.
+async function sendRegistroToSupabase(r){
+  const row={
+    reg_id:String(r.id),emp:r.emp,data:r.data,tipo:r.tipo,hora:r.hora,
+    lat:r.lat!=null?r.lat:null,lon:r.lon!=null?r.lon:null,cidade:r.cidade||null,estado:r.estado||null,
+    endereco:r.addr||null,precisao:r.prec!=null?r.prec:null,ip:r.ip||null,disp:r.disp||null,
+    janta:!!r.janta,registrado_em:r.at
+  };
+  if(!supaReady||!supa){supaQueuePush(row);return;}
+  try{
+    const {error}=await supa.from('registros_ponto').upsert(row,{onConflict:'reg_id'});
+    if(error){console.warn('Supabase (registro) falhou, enfileirado:',error.message);supaQueuePush(row);}
+  }catch(e){console.warn('Supabase (registro) falhou, enfileirado:',e&&e.message);supaQueuePush(row);}
+}
+// Envia uma cópia completa do estado (todos os colaboradores, ajustes, notificações etc.) sempre
+// que o app salva na nuvem — mantém no Supabase um espelho independente de tudo, não só dos pontos.
+async function sendSnapshotToSupabase(data){
+  if(!supaReady||!supa)return;
+  try{
+    const {error}=await supa.from('pontoapp_snapshot').upsert({id:1,dados:data,atualizado_em:new Date().toISOString()});
+    if(error)console.warn('Supabase (cópia completa) falhou:',error.message);
+  }catch(e){console.warn('Supabase (cópia completa) falhou:',e&&e.message);}
+}
+try{window.addEventListener('online',flushSupabaseQueue);}catch(e){}
+try{setInterval(flushSupabaseQueue,60000);}catch(e){}
+
 const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
 
@@ -553,6 +626,7 @@ function saveNow(){
     cloudWriteChain=cloudWriteChain.then(()=>saveToCloudMerged(data)).catch(e=>console.warn('Falha ao salvar na nuvem:',e&&e.message));
   } else {
     lastPushed=js;
+    sendSnapshotToSupabase(data); // Firebase indisponível: manda mesmo assim uma cópia pro Supabase
   }
 }
 /* ===== Mesclagem segura de dados remotos =====
@@ -768,6 +842,7 @@ async function saveToCloudMerged(data){
   try{localStorage.setItem('pontoapp_v2',jsFinal);}catch(e){}
   await ref.set(JSON.parse(JSON.stringify(merged)));
   refreshUI();
+  sendSnapshotToSupabase(merged); // cópia completa em paralelo — não bloqueia nem afeta o Firebase
 }
 function refreshUI(){
   if(state.role&&state.user){renderNav();render();updateNotifBadge();}
@@ -1293,9 +1368,13 @@ async function registrarPonto(btn,force){
     state.lastGeo={...geo,...info,time,tipo:SCHED_LABEL[next]};
     // Janta: fechamento (Saída) registrado após as 18:59
     const janta = (next==='saida' && time > '18:59');
-    state.registros.unshift({id:newId(),emp:state.user.nome,data:todayKey(),tipo:SCHED_LABEL[next],hora:time,
+    const novoRegistro={id:newId(),emp:state.user.nome,data:todayKey(),tipo:SCHED_LABEL[next],hora:time,
       lat:geo.latitude,lon:geo.longitude,addr:geo.addr,cidade:geo.cidade,estado:geo.estado,prec:geo.accuracy,ip,janta,
-      disp:`${info.dev} • ${info.os} • ${info.br}`,at:now.toISOString()});
+      disp:`${info.dev} • ${info.os} • ${info.br}`,at:now.toISOString()};
+    state.registros.unshift(novoRegistro);
+    // Grava também no Supabase, em paralelo e sem bloquear — assim o ponto fica registrado em
+    // dois bancos independentes desde o instante em que é batido, não só depois da mesclagem.
+    sendRegistroToSupabase(novoRegistro);
     pushNotif({for:'admin',ic:'📍',c:'var(--c2)',t:'Novo registro de ponto',s:`${state.user.nome} • ${SCHED_LABEL[next]} ${time} • ${geo.cidade}/${geo.estado}`});
     state.logs.unshift({quem:state.user.nome,acao:'Registrou '+SCHED_LABEL[next].toLowerCase(),
       alvo:`${time} • ${geo.latitude.toFixed(4)},${geo.longitude.toFixed(4)}`,ip:'201.9.88.3',
@@ -3098,6 +3177,7 @@ function fmtd(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`
 function diaSemanaExt(iso){const dt=new Date(iso+'T12:00:00');return ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][dt.getDay()];}
 tick();
 initPersistence();
+initSupabase();
 </script>
 </body>
 </html>

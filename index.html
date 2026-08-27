@@ -2875,7 +2875,8 @@ function adminPayroll(){
       <button class="btn sm primary" onclick="imprimirPonto('${x.emp.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir espelho</button>
     </td></tr>`).join(''):`<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhum colaborador fechou o ponto ainda. Quando alguém fechar, aparece aqui automaticamente.</td></tr>`;
   return `${head('Fechamento de Folha','Período '+periodLabel(prevBounds)+' (período encerrado).',
-    `<button class="btn ghost" onclick="imprimirFolhaTodos()">🖨️ Imprimir todos (fechados)</button>
+    `<button class="btn ghost" onclick="abrirImprimirPorPeriodo()">🖨️ Imprimir por Período</button>
+     <button class="btn ghost" onclick="imprimirFolhaTodos()">🖨️ Imprimir todos (fechados)</button>
      <button class="btn primary" onclick="fecharFolha()">🔒 Fechar Folha</button>`)}
   <div class="grid g-4">
     ${kpi('✅','var(--c2)','Pontos fechados',fechs.length,'colaboradores fecharam')}
@@ -3034,6 +3035,55 @@ function imprimirFolhaTodos(){
   const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,pb)}</div>`).join('');
   printHTML(folhaDocHTML(inner));
   toast('Impressão em lote',`${xs.length} ponto(s) fechado(s) do período.`,'info');
+}
+// ===== Imprimir por Período — escolha livre de mês e de quem imprimir (dentro de
+// Fechamento de Folha, pedido do administrador). Diferente de "Imprimir todos (fechados)"
+// (sempre o período que acabou de fechar) e do "Imprimir" avulso de cada tela (sempre o período
+// atual): aqui quem decide o período — passado, atual ou futuro cadastrado — e o alcance
+// (um colaborador específico ou todos) é o administrador, na hora.
+function abrirImprimirPorPeriodo(){
+  const emps=state.employees.filter(e=>e.status!=='inativo');
+  if(!emps.length){toast('Nenhum funcionário','Cadastre funcionários antes de imprimir.','err');return;}
+  const opts=emps.map(e=>`<option value="${e.nome.replace(/"/g,'&quot;')}">${e.nome}</option>`).join('');
+  const pkAtual=periodKey(currentPeriod());
+  openModal({content:`<div class="modal-head"><h3>🖨️ Imprimir por Período</h3></div>
+  <div class="modal-body">
+    <div class="field"><label>Período (mês em que ele começa, dia 16)</label><input class="input" type="month" id="ipPeriodo" value="${pkAtual}"></div>
+    <div class="field"><label>O que imprimir?</label><select class="input" id="ipQuem" onchange="toggleIpEmp()">
+      <option value="todos">Todos os colaboradores</option>
+      <option value="um">Um colaborador específico</option>
+    </select></div>
+    <div class="field" id="ipEmpWrap" style="display:none"><label>Colaborador</label><select class="input" id="ipEmp">${opts}</select></div>
+    <div class="sub" style="margin-top:2px">O período segue o padrão do sistema: do dia 16 do mês escolhido até o dia 15 do mês seguinte.</div>
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
+  <button class="btn primary" onclick="confirmImprimirPorPeriodo()">🖨️ Imprimir</button></div>`});
+}
+function toggleIpEmp(){
+  const quem=document.getElementById('ipQuem').value;
+  document.getElementById('ipEmpWrap').style.display=quem==='um'?'':'none';
+}
+function confirmImprimirPorPeriodo(){
+  const pkRaw=document.getElementById('ipPeriodo').value;
+  if(!pkRaw){toast('Selecione o período','Escolha o mês do período a imprimir.','err');return;}
+  const b=periodBoundsFromKey(pkRaw);
+  const quem=document.getElementById('ipQuem').value;
+  if(quem==='um'){
+    const emp=document.getElementById('ipEmp').value;
+    if(!emp){toast('Selecione o colaborador','','err');return;}
+    closeModal();
+    imprimirPonto(emp,b);
+    return;
+  }
+  const ativos=state.employees.filter(e=>e.status!=='inativo');
+  if(!ativos.length){toast('Nada a imprimir','Nenhum funcionário cadastrado.','info');return;}
+  const fechouSet=new Set(fechadosNoPeriodo(pkRaw).map(x=>x.emp));
+  const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
+  const xs=ativos.map(e=>({emp:e.nome,status:fechouSet.has(e.nome)?'fechado':(collectPonto(e.nome,inPeriod).dias>0?'aberto':'pendencia')}));
+  const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,b)}</div>`).join('');
+  closeModal();
+  printHTML(folhaDocHTML(inner));
+  toast('Impressão em lote',`${xs.length} colaborador(es) • ${periodLabel(b)}.`,'info');
 }
 // Colaborador com atividade no período informado que ainda não fechou (mesmo critério usado
 // pelo aviso "período anterior em aberto" mostrado para o colaborador).

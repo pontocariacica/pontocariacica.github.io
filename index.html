@@ -237,20 +237,25 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
 
 /* ===== Barra de progresso da jornada (card "Jornada em Andamento") ===== */
 .jbar-row{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 9px}
-.jbar-time{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px}
-.jbar-time small{font-weight:600;color:var(--muted);font-size:12px;margin-left:5px}
-.jbar-pct{font-variant-numeric:tabular-nums;font-weight:800;font-size:14px;color:var(--text-2)}
-.jbar-track{position:relative;height:9px;border-radius:99px;background:var(--surface-2);
+.jbar-time{font-variant-numeric:tabular-nums;font-weight:800;font-size:26px}
+.jbar-time small{font-weight:600;color:var(--muted);font-size:14px;margin-left:6px}
+.jbar-track{position:relative;height:30px;border-radius:99px;background:var(--surface-2);
   box-shadow:inset 0 1px 2px rgba(11,15,25,.12);overflow:hidden}
 .jbar-fill{position:relative;height:100%;border-radius:99px;width:0%;
   background:linear-gradient(90deg,var(--babyblue),var(--c2));
-  transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(27,175,122,.45)}
+  transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(27,175,122,.45);
+  display:flex;align-items:center;justify-content:flex-end;padding-right:12px}
 .jbar-fill::after{content:"";position:absolute;inset:0;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.35));
   width:26px;right:0;left:auto;animation:jbarSheen 2.6s ease-in-out infinite}
 .jbar-fill.warn{background:linear-gradient(90deg,var(--c2),var(--s-warn))}
 .jbar-fill.good{background:var(--s-good);box-shadow:0 0 10px rgba(12,163,12,.4)}
 .jbar-fill.good::after{display:none}
+.jbar-fill b{color:#fff;font-size:13px;font-weight:800;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3);font-variant-numeric:tabular-nums}
+/* Com a barra bem cheia (%) pequena, o rótulo não cabe dentro do preenchimento — nesse caso
+   ele sai da barra e aparece à direita, sobre o trilho vazio, em vez de ficar cortado. */
+.jbar-pct-out{position:absolute;top:50%;right:12px;transform:translateY(-50%);
+  color:var(--text-2);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
 @keyframes jbarSheen{0%,100%{opacity:.55}50%{opacity:1}}
 .jbar-marks{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);font-weight:600}
 .jbar-extra{margin-top:9px;font-size:12px;font-weight:700;color:#a06a00;display:flex;align-items:center;gap:5px}
@@ -1053,7 +1058,8 @@ function updateJornadaLive(){
   }
   // Barra de progresso da jornada (card "Jornada em Andamento")
   const jBarTime=el('jBarTime'); if(jBarTime)jBarTime.innerHTML=fmtMin(j.trabMin)+' <small>de '+fmtMin(j.previstaMin)+'</small>';
-  const jBarPct=el('jBarPct'); if(jBarPct)jBarPct.textContent=j.pct+'%';
+  const jBarPctIn=el('jBarPctIn'); if(jBarPctIn){jBarPctIn.textContent=j.pct+'%';jBarPctIn.style.display=j.pct>=25?'inline':'none';}
+  const jBarPctOut=el('jBarPctOut'); if(jBarPctOut){jBarPctOut.textContent=j.pct+'%';jBarPctOut.style.display=j.pct<25?'inline':'none';}
   const jBarFill=el('jBarFill');
   if(jBarFill){jBarFill.style.width=j.pct+'%';jBarFill.className='jbar-fill'+(jBarState(j)?' '+jBarState(j):'');}
   const jBarExtra=el('jBarExtra');
@@ -1679,9 +1685,11 @@ function jornadaCard(){
     <div class="next-badge" id="jStatus" style="margin:0 0 16px"><span class="pill"></span> Jornada em andamento</div>
     <div class="jbar-row">
       <div class="jbar-time" id="jBarTime">${fmtMin(j.trabMin)} <small>de ${fmtMin(j.previstaMin)}</small></div>
-      <div class="jbar-pct" id="jBarPct">${j.pct}%</div>
     </div>
-    <div class="jbar-track"><div class="jbar-fill${barSt?' '+barSt:''}" id="jBarFill" style="width:${j.pct}%"></div></div>
+    <div class="jbar-track">
+      <div class="jbar-fill${barSt?' '+barSt:''}" id="jBarFill" style="width:${j.pct}%"><b id="jBarPctIn" style="display:${j.pct>=25?'inline':'none'}">${j.pct}%</b></div>
+      <b id="jBarPctOut" class="jbar-pct-out" style="display:${j.pct<25?'inline':'none'}">${j.pct}%</b>
+    </div>
     <div class="jbar-marks"><span>${j.ini}</span><span>${j.fim}</span></div>
     <div class="jbar-extra" id="jBarExtra" style="display:${j.extraMin>0?'flex':'none'}">⚡ +${fmtMin(j.extraMin)} além da jornada</div>
     <div class="grid g-2" style="gap:14px;margin-top:14px">

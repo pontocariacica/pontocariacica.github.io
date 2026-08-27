@@ -2625,7 +2625,7 @@ function adminRegAcompanhar(){
       <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm ghost" onclick="verPonto('${state.acompEmp.replace(/'/g,"")}')">👁️ Ver detalhes</button>
-      <button class="btn sm primary" onclick="imprimirPonto('${state.acompEmp.replace(/'/g,"")}')">🖨️ Imprimir espelho</button>
+      <button class="btn sm primary" onclick="imprimirPonto('${state.acompEmp.replace(/'/g,"")}',periodBoundsFromKey('${periodKey(b)}'))">🖨️ Imprimir espelho</button>
     </div>
   </div>`;
 }
@@ -2864,7 +2864,7 @@ function adminPayroll(){
       <td><span class="badge ${bd[0]}">${bd[1]}</span></td>
       <td style="white-space:nowrap">
         <button class="btn sm ghost" onclick="verPonto('${e.nome.replace(/'/g,"")}')">👁️ Ver ponto</button>
-        <button class="btn sm primary" onclick="imprimirPonto('${e.nome.replace(/'/g,"")}')">🖨️ Imprimir</button>
+        <button class="btn sm primary" onclick="imprimirPonto('${e.nome.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir</button>
       </td></tr>`;
   }).join('')||`<tr><td colspan="6" style="color:var(--muted)">Nenhum funcionário cadastrado.</td></tr>`;
   const fechRows=fechs.length?fechs.map(x=>`<tr>
@@ -2872,7 +2872,7 @@ function adminPayroll(){
     <td><small style="color:var(--muted)">${x.at||'—'}</small></td>
     <td style="white-space:nowrap">
       <button class="btn sm ghost" onclick="verPonto('${x.emp.replace(/'/g,"")}')">👁️ Ver ponto</button>
-      <button class="btn sm primary" onclick="imprimirPonto('${x.emp.replace(/'/g,"")}')">🖨️ Imprimir espelho</button>
+      <button class="btn sm primary" onclick="imprimirPonto('${x.emp.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir espelho</button>
     </td></tr>`).join(''):`<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhum colaborador fechou o ponto ainda. Quando alguém fechar, aparece aqui automaticamente.</td></tr>`;
   return `${head('Fechamento de Folha','Período '+periodLabel(prevBounds)+' (período encerrado).',
     `<button class="btn ghost" onclick="imprimirFolhaTodos()">🖨️ Imprimir todos (fechados)</button>
@@ -2901,10 +2901,12 @@ function adminPayroll(){
 // ===== Impressão de espelhos =====
 // Monta os dias reais do período a partir dos registros, com contagem de jantas.
 // bounds (opcional): período específico a imprimir (ex.: um período antigo em "Pontos
-// Anteriores"). Sem bounds, usa previousPeriod (o período que acabou de terminar) — o mesmo
-// período que "Fechar Folha" fecha — porque é o comportamento padrão do fechamento de folha.
+// Anteriores", ou o período fechado sendo revisado em "Fechamento de Folha" — esses lugares
+// sempre passam bounds explícito). Sem bounds, usa o período ATUAL (em andamento) — pedido do
+// administrador: a impressão avulsa ("Imprimir espelho" de qualquer tela) deve sempre refletir
+// o período de agora, não o período passado.
 function espelhoData(empName,bounds){
-  const b=bounds||previousPeriod();
+  const b=bounds||currentPeriod();
   const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const r=collectPonto(empName,inPeriod);
   r.periodo=periodLabel(b);
@@ -2992,13 +2994,14 @@ function folhaDocHTML(inner){
   </style></head><body>${inner}</body></html>`;
 }
 // bounds (opcional): imprime um período específico (ex.: um período antigo em "Pontos
-// Anteriores" do colaborador — nesse caso já é sempre um período fechado). Sem bounds, imprime o
-// período que acabou de terminar (comportamento padrão da tela de Fechamento de Folha).
+// Anteriores", ou o período fechado sendo revisado em "Fechamento de Folha" — esses lugares
+// sempre passam bounds explícito). Sem bounds, imprime o período ATUAL (em andamento) — a
+// impressão avulsa sempre reflete o período de agora, não o período passado.
 function imprimirPonto(emp,bounds){
   // Situação real (não depende mais de state.folha, que nunca chegava a ser preenchido) —
   // fechado se o colaborador já fechou o período em questão, aberto se teve atividade sem
   // fechar, pendência se não teve nenhum registro no período.
-  const b=bounds||previousPeriod();
+  const b=bounds||currentPeriod();
   const fechouSet=new Set(fechadosNoPeriodo(periodKey(b)).map(x=>x.emp));
   const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const status=fechouSet.has(emp)?'fechado':(collectPonto(emp,inPeriod).dias>0?'aberto':'pendencia');
@@ -3023,7 +3026,12 @@ function imprimirFolhaTodos(){
   const fechados=fechadosPeriodoAtual();
   if(!fechados.length){toast('Nada a imprimir','Não há pontos fechados no período.','info');return;}
   const xs=fechados.map(f=>({emp:f.emp,status:'fechado'}));
-  const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x)}</div>`).join('');
+  // Impressão em lote é sempre sobre o período FECHADO (o que acabou de terminar) — os pontos
+  // batidos no período atual, ainda em andamento, não têm nada a ver com esse fechamento. Por
+  // isso passa previousPeriod() explícito, em vez de depender do padrão de espelhoSection (que
+  // agora é o período atual, para as impressões avulsas em outras telas).
+  const pb=previousPeriod();
+  const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,pb)}</div>`).join('');
   printHTML(folhaDocHTML(inner));
   toast('Impressão em lote',`${xs.length} ponto(s) fechado(s) do período.`,'info');
 }

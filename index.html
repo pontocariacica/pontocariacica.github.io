@@ -552,11 +552,15 @@ async function flushSupabaseQueue(){
 // em paralelo ao Firebase, sem esperar nem depender dele. Nunca lança erro pra fora: se falhar,
 // só enfileira pra tentar de novo depois.
 async function sendRegistroToSupabase(r){
+  // registrado_em não pode ser nulo no Supabase — registros bem antigos (de antes desse campo
+  // existir) não têm r.at; sem esse fallback, o envio falhava pra sempre (violação de not-null)
+  // e ficava preso na fila de novo a cada tentativa, sem nunca conseguir ser gravado.
+  const at=r.at||(r.data&&r.hora?new Date(r.data+'T'+r.hora+':00').toISOString():new Date().toISOString());
   const row={
     reg_id:String(r.id),emp:r.emp,data:r.data,tipo:r.tipo,hora:r.hora,
     lat:r.lat!=null?r.lat:null,lon:r.lon!=null?r.lon:null,cidade:r.cidade||null,estado:r.estado||null,
     endereco:r.addr||null,precisao:r.prec!=null?r.prec:null,ip:r.ip||null,disp:r.disp||null,
-    janta:!!r.janta,registrado_em:r.at
+    janta:!!r.janta,registrado_em:at
   };
   if(!supaReady||!supa){supaQueuePush(row);return;}
   try{
@@ -2459,14 +2463,19 @@ function inserirPontoManual(emp,data,tipo,hora,obs){
     r.addr='Ponto lançado manualmente pelo administrador'+(obs?' — '+obs:'');
     r.disp='Lançamento manual (Admin)';r.at=nowIso;
   }else{
-    state.registros.unshift({id:newId(),emp:emp.nome,data,tipo,hora,
+    r={id:newId(),emp:emp.nome,data,tipo,hora,
       lat:null,lon:null,addr:'Ponto lançado manualmente pelo administrador'+(obs?' — '+obs:''),
       cidade:'Manual',estado:'RH',prec:0,ip:'—',janta,manual:true,
-      disp:'Lançamento manual (Admin)',at:nowIso});
+      disp:'Lançamento manual (Admin)',at:nowIso};
+    state.registros.unshift(r);
   }
   const st=state.punchesByEmp[emp.id]||(state.punchesByEmp[emp.id]={});
   const day=st[data]||(st[data]={});
   day[tipo==='Entrada'?'entrada':'saida']={time:hora,manual:true,ip:'—',info:{dev:'Manual',os:'Admin',br:'RH'},at:nowIso};
+  // Espelho no Supabase: lançamento manual pelo admin é tão "ponto real" quanto o batido pelo
+  // colaborador — sem isso, só entrava na cópia completa (pontoapp_snapshot), não na tabela
+  // linha-a-linha (registros_ponto).
+  sendRegistroToSupabase(r);
 }
 function lancarPontoManual(){
   const gv=x=>{const el=document.getElementById(x);return el?el.value:'';};

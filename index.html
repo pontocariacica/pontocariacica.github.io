@@ -2200,7 +2200,24 @@ function colabAbsences(){
     <div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Status</th></tr></thead>
     <tbody>${afastRows}</tbody></table></div></div>`;
 }
-function vacBadge(s){return s==='gozadas'?'b-good':s==='agendada'?'b-info':s==='pendente'?'b-warn':s==='reprovada'?'b-crit':'b-mut';}
+function vacBadge(s){return (s==='concluída'||s==='gozadas')?'b-good':s==='agendada'?'b-info':s==='pendente'?'b-warn':s==='reprovada'?'b-crit':'b-mut';}
+// Muda sozinho o status de "agendada" pra "concluída" assim que a data final já passou — sem
+// isso, uma férias já terminada continuava aparecendo como "agendada" pra sempre no painel do
+// administrador, até alguém mudar isso na mão. Roda pouco depois de abrir o app e depois a cada
+// poucos minutos (ver chamadas lá embaixo), então não depende de ninguém abrir a tela de férias
+// pra "perceber" que o período já passou. Não mexe em nada além do status: os dias já contam pro
+// saldo do colaborador do mesmo jeito, e o bloqueio de jornada durante a viagem já é decidido pela
+// data (ver collectPonto/periodoNaoBatido), não pelo status — então essa mudança é só visual/de
+// relatório, sem risco de afetar o cálculo de ponto de ninguém.
+function advanceVacationStatuses(){
+  const today=todayKey();
+  let changed=false;
+  (state.vacations||[]).forEach(v=>{
+    if(v.status==='agendada'&&v.fim&&v.fim<today){v.status='concluída';v._ts=Date.now();changed=true;}
+  });
+  if(changed){saveNow();refreshUI();}
+  return changed;
+}
 
 /* conta dias corridos (inclusivo) entre duas datas ISO */
 function contarDias(ini,fim){
@@ -3600,6 +3617,8 @@ function diaSemanaExt(iso){const dt=new Date(iso+'T12:00:00');return ['Domingo',
 tick();
 initPersistence();
 initSupabase();
+try{setTimeout(advanceVacationStatuses,20000);}catch(e){}
+try{setInterval(advanceVacationStatuses,5*60*1000);}catch(e){}
 </script>
 </body>
 </html>

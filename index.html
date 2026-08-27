@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -40,13 +40,11 @@
   --logo-ink:#14284d;
 }
 html[data-theme="dark"]{
-  /* Azul-marinho — mesma família de cor do emblema da logo (#123a8f/#0d2c6f), pra ficar
-     tudo coerente: botões, links, menu ativo, foco, gráficos etc. */
-  --blue:#123a8f; --blue-600:#0d2c6f; --pink:#ec7bad; --pink-600:#e7649e; --babyblue:#2f5aa8; --babyblue-soft:#16233d; --pink-soft:#3a1f2c;
+  --blue:#3a5a9c; --blue-600:#2c4880; --pink:#ec7bad; --pink-600:#e7649e; --babyblue:#4f70b4; --babyblue-soft:#1b2740; --pink-soft:#3a1f2c;
   --surface-1:#16181d; --surface-2:#1d2026; --page:#0d0e11;
   --text-1:#f4f5f7; --text-2:#b7bcc9; --muted:#8a90a2;
-  --grid:#2a2d34; --border:rgba(255,255,255,.10); --ring:rgba(47,90,168,.5);
-  --c1:#123a8f; --c2:#199e70; --c3:#c98500; --c4:#9a83e6; --c5:#ec7bad; --c6:#d95926;
+  --grid:#2a2d34; --border:rgba(255,255,255,.10); --ring:rgba(58,90,156,.45);
+  --c1:#3a5a9c; --c2:#199e70; --c3:#c98500; --c4:#9a83e6; --c5:#ec7bad; --c6:#d95926;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.4);
   --logo-ink:#5c93ec;
 }
@@ -461,6 +459,7 @@ body{ zoom: var(--ui-scale); }
         <div class="searchbar">🔎<input placeholder="Buscar colaboradores…" id="globalSearch" oninput="onSearch(this.value)"></div>
         <div class="topbar-right">
           <div class="clock" id="topClock"><small id="topDate">—</small><span id="topTime">--:--:--</span></div>
+          <button class="icon-btn" onclick="toggleTheme()" title="Tema claro/escuro" id="themeBtn">🌙</button>
           <button class="icon-btn notif" onclick="openNotifs()" title="Notificações">🔔<span class="dot" id="notifDot"></span></button>
           <div class="user-chip">
             <img class="avatar" id="topAvatar" alt="">
@@ -495,7 +494,7 @@ function empAvatar(nome){
 }
 
 const state = {
-  theme:'dark', role:null, user:null, page:'dashboard', collapsed:false,
+  theme:'light', role:null, user:null, page:'dashboard', collapsed:false,
   punchesByEmp:{}, // por funcionário -> por data: {entrada,saida}
   employees:[],      // cadastrados pelo administrador
   adjustments:[],
@@ -1288,9 +1287,11 @@ async function openInstallHelp(){
 }
 
 /* ============================ TEMA / SIDEBAR ============================ */
-// Tema fixado em escuro (azul-marinho) a pedido do administrador — o botão de alternar
-// claro/escuro foi removido da barra superior; state.theme e o atributo data-theme no
-// <html> começam sempre em 'dark' agora.
+function toggleTheme(){
+  state.theme=state.theme==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',state.theme);
+  document.getElementById('themeBtn').textContent=state.theme==='light'?'🌙':'☀️';
+}
 function toggleSidebar(){state.collapsed=!state.collapsed;document.getElementById('layout').classList.toggle('collapsed',state.collapsed);}
 function toggleMobileNav(){document.getElementById('sidebar').classList.toggle('open');}
 

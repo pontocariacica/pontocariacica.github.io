@@ -245,13 +245,13 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
 .jbar-track{position:relative;height:30px;border-radius:99px;background:var(--surface-2);
   box-shadow:inset 0 1px 2px rgba(11,15,25,.12);overflow:hidden}
 .jbar-fill{position:relative;height:100%;border-radius:99px;width:0%;
-  background:linear-gradient(90deg,var(--babyblue),var(--c2));
-  transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(27,175,122,.45);
+  background:linear-gradient(90deg,var(--green),var(--green-600));
+  transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(16,185,129,.45);
   display:flex;align-items:center;justify-content:flex-end;padding-right:12px}
 .jbar-fill::after{content:"";position:absolute;inset:0;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.35));
   width:26px;right:0;left:auto;animation:jbarSheen 2.6s ease-in-out infinite}
-.jbar-fill.warn{background:linear-gradient(90deg,var(--c2),var(--s-warn))}
+.jbar-fill.warn{background:linear-gradient(90deg,var(--green),var(--s-warn))}
 .jbar-fill.good{background:var(--s-good);box-shadow:0 0 10px rgba(12,163,12,.4)}
 .jbar-fill.good::after{display:none}
 .jbar-fill b{color:#fff;font-size:13px;font-weight:800;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3);font-variant-numeric:tabular-nums}
@@ -1557,6 +1557,12 @@ function bannerPeriodoAberto(){
 
 // Feriado cadastrado para a data (chave AAAA-MM-DD), ou null
 function feriadoDe(key){return (state.holidays||[]).find(h=>h.data===key)||null;}
+// Próximo feriado a partir de hoje (nacional ou estadual, o que vier primeiro) — usado no card
+// "Próximo feriado" da tela inicial do colaborador.
+function proximoFeriado(){
+  const today=todayKey();
+  return (state.holidays||[]).filter(h=>h.data>=today).sort((a,b)=>a.data.localeCompare(b.data))[0]||null;
+}
 // Verifica se o registro do colaborador está bloqueado nesta data (domingo/feriado),
 // respeitando as liberações definidas pelo administrador. Retorna {motivo,msg} ou null.
 function registroBloqueado(dateKey,dow){
@@ -1746,9 +1752,16 @@ function colabDashboard(){
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const per=collectPonto(state.user.nome,inPeriod);
   const temPonto=SCHED.some(s=>t[s]);
+  const feriado=proximoFeriado();
   return `${head('Início','Olá, '+primeiro+' 👋 Acompanhe suas horas extras e jantas.')}
   ${bannerPeriodoAberto()}
   ${jornadaCard()}
+  ${feriado?`<div class="card" style="margin-top:16px"><h3>📌 Próximo feriado</h3>
+    <div class="mini-list">
+      <div class="mini-item"><div class="ic" style="background:var(--surface-2)">📅</div>
+        <div class="txt"><b>${feriado.nome}</b><small>${fmtd(feriado.data)} • ${diaSemanaExt(feriado.data)}</small></div>
+        <span class="badge ${feriado.tipo==='Nacional'?'b-info':'b-warn'}">${feriado.tipo}</span></div>
+    </div></div>`:''}
   <div class="grid g-4" style="margin-top:16px">
     ${kpi('➕','var(--c3)','Hora extra hoje',`<span id="jExtraKpi">${fmtMin(j.extraMin)}</span>`,j.extraMin>0?'Acima da jornada':'Nenhuma')}
     ${kpi('🍽️','var(--c5)','Janta hoje',jantou?'Sim':'—',jantou?'Saída após 18:59':'Sem janta hoje')}

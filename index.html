@@ -338,6 +338,32 @@ select.input{appearance:none}
 .mini-item small{color:var(--muted);font-size:12px}
 .mini-item .time{color:var(--muted);font-size:12px;white-space:nowrap}
 
+/* ===== Suporte (chat) ===== */
+.sup-head{display:flex;align-items:center;gap:12px}
+.sup-avatar{position:relative;width:50px;height:50px;border-radius:50%;flex:0 0 50px;display:grid;place-items:center;
+  font-size:24px;background:linear-gradient(135deg,var(--babyblue),var(--blue));box-shadow:var(--shadow)}
+.sup-avatar .dot{position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-radius:50%;
+  background:var(--green);border:2.5px solid var(--surface-1);box-shadow:0 0 0 1px rgba(16,185,129,.35)}
+.sup-avatar.sm{width:36px;height:36px;flex:0 0 36px;font-size:17px}
+.sup-avatar.sm .dot{width:11px;height:11px}
+.sup-name{font-size:15.5px;font-weight:800}
+.sup-status{font-size:12.5px;color:var(--green-600);font-weight:600;display:flex;align-items:center;gap:5px}
+html[data-theme="dark"] .sup-status{color:var(--green)}
+.sup-thread{display:flex;flex-direction:column;gap:10px;padding:16px 4px;max-height:420px;overflow-y:auto}
+.sup-msg{display:flex;gap:8px;max-width:82%}
+.sup-msg .bub{padding:10px 14px;border-radius:16px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.sup-msg .meta{font-size:10.5px;color:var(--muted);margin-top:4px}
+.sup-msg.in{align-self:flex-start}
+.sup-msg.in .bub{background:var(--surface-2);border-bottom-left-radius:4px}
+.sup-msg.out{align-self:flex-end;flex-direction:row-reverse}
+.sup-msg.out .bub{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;border-bottom-right-radius:4px}
+.sup-msg.out .meta{text-align:right}
+.sup-compose{display:flex;gap:10px;align-items:flex-end;margin-top:14px}
+.sup-compose textarea{flex:1;min-height:46px;max-height:140px}
+.sup-empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:13.5px}
+.sup-list-item{cursor:pointer}
+.sup-list-item b.unread::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--s-crit);margin-left:7px;vertical-align:middle}
+
 @keyframes pop{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes slidein{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
@@ -507,6 +533,7 @@ const state = {
     {data:'2026-12-25',nome:'Natal',tipo:'Nacional'},
   ],
   vacations:[],
+  suporte:[], // mensagens do chat de Suporte (sugestões/feedback dos colaboradores + respostas do Admin)
   afastamentos:[],
   escalas:[
     {nome:'5x2',desc:'Segunda a sexta',h:'08:00 – 17:00',a:'1h almoço',c:'var(--c1)',n:0},
@@ -734,7 +761,7 @@ try{setInterval(flushSupabaseDeleteQueue,60000);}catch(e){}
 try{setInterval(flushSupabaseSnapshot,60000);}catch(e){}
 try{setInterval(reconcileSupabaseRegistros,5*60*1000);}catch(e){}
 
-const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config'];
+const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config','suporte'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
 
 function stableJSON(src){const o={};PERSIST_KEYS.forEach(k=>o[k]=src?src[k]:undefined);return JSON.stringify(o);}
@@ -938,6 +965,7 @@ function applyRemote(data){
     }
     else if(k==='notifications'){state.notifications=mergeByIdLastWriteWinsSorted(state.notifications,data.notifications,x=>'id:'+x.id,x=>Math.floor(x.id)||0);}
     else if(k==='vacations'){state.vacations=mergeByIdLastWriteWinsSorted(state.vacations,data.vacations,x=>'id:'+x.id,x=>x._ts||x.id||0);}
+    else if(k==='suporte'){state.suporte=mergeByIdLastWriteWinsSorted(state.suporte,data.suporte,x=>'id:'+x.id,x=>x._ts||x.id||0);}
     else if(k==='fechamentos'){state.fechamentos=mergeByIdLastWriteWins(state.fechamentos,data.fechamentos,x=>[x.emp,x.periodKey,x.tipo].join('|'),x=>x._ts||0);}
     else if(k==='closedPeriods'){state.closedPeriods=mergeClosedPeriods(state.closedPeriods,data.closedPeriods);}
     else if(k==='holidays'){state.holidays=mergeHolidays(state.holidays,data.holidays);}
@@ -953,6 +981,7 @@ function applyRemote(data){
 // em segundo plano) de sobrescrever uma aprovação de ajuste ou um registro feito por outra pessoa
 // nesse meio-tempo. As gravações são encadeadas (cloudWriteChain) pra nunca rodar duas ao mesmo
 // tempo e uma resposta de rede fora de ordem desfazer a outra.
+let suporteAdminSel=null; // nome do colaborador cuja conversa de Suporte o Admin está vendo (seleção local, não sincronizada)
 let cloudWriteChain=Promise.resolve();
 async function saveToCloudMerged(data){
   const ref=db.collection('pontoapp').doc('dados');
@@ -966,6 +995,7 @@ async function saveToCloudMerged(data){
     merged.adjustments=mergeByIdLastWriteWinsSorted(data.adjustments,remoto.adjustments,x=>'id:'+x.id,x=>x._ts||x.id||0).filter(a=>!dead.has('adj:'+a.id));
     merged.notifications=mergeByIdLastWriteWinsSorted(data.notifications,remoto.notifications,x=>'id:'+x.id,x=>Math.floor(x.id)||0);
     merged.vacations=mergeByIdLastWriteWinsSorted(data.vacations,remoto.vacations,x=>'id:'+x.id,x=>x._ts||x.id||0);
+    merged.suporte=mergeByIdLastWriteWinsSorted(data.suporte,remoto.suporte,x=>'id:'+x.id,x=>x._ts||x.id||0);
     merged.fechamentos=mergeByIdLastWriteWins(data.fechamentos,remoto.fechamentos,x=>[x.emp,x.periodKey,x.tipo].join('|'),x=>x._ts||0);
     merged.punchesByEmp=mergePunchesByEmp(data.punchesByEmp,remoto.punchesByEmp);
     merged.closedPeriods=mergeClosedPeriods(data.closedPeriods,remoto.closedPeriods);
@@ -1178,6 +1208,7 @@ const NAV={
     {id:'schedules',ic:'🕒',t:'Escalas & Jornadas'},
     {id:'absences',ic:'🏖️',t:'Férias & Folgas',badge:'ferias'},
     {id:'holidays',ic:'📌',t:'Feriados'},
+    {id:'suporte',ic:'🎧',t:'Suporte',badge:'suporte'},
     {sec:'Sistema'},
     {id:'reports',ic:'📄',t:'Relatórios'},
     {id:'logs',ic:'🛡️',t:'Auditoria'},
@@ -1193,6 +1224,8 @@ const NAV={
     {id:'myadjust',ic:'✏️',t:'Solicitar Ajuste'},
     {id:'myabsences',ic:'🏖️',t:'Férias & Folgas'},
     {id:'profile',ic:'👤',t:'Meu Perfil'},
+    {sec:'Ajuda'},
+    {id:'suporte',ic:'🎧',t:'Suporte',badge:'suporte'},
   ],
 };
 
@@ -1202,6 +1235,9 @@ function renderNav(){
     pend:state.adjustments.filter(a=>a.status==='pendente').length,
     ferias:state.vacations.filter(v=>v.status==='pendente').length,
     fechamentos:(state.fechamentos||[]).filter(f=>!f.seen).length,
+    suporte:state.role==='admin'
+      ?(state.suporte||[]).filter(m=>m.from==='colab'&&!m.read).length
+      :(state.suporte||[]).filter(m=>m.emp===(state.user&&state.user.nome)&&m.from==='admin'&&!m.read).length,
   };
   nav.innerHTML=NAV[state.role].map(i=>{
     if(i.sec)return `<div class="nav-sec">${i.sec}</div>`;
@@ -1211,7 +1247,7 @@ function renderNav(){
       <span class="ic">${i.ic}</span><span>${i.t}</span>${badge}</button>`;
   }).join('');
 }
-function go(id){if(id==='acompanhar')state.acompMonth=ymNow();state.page=id;renderNav();render();saveSession();document.getElementById('sidebar').classList.remove('open');window.scrollTo(0,0);}
+function go(id){if(id==='acompanhar')state.acompMonth=ymNow();if(id==='suporte'&&state.role==='colab')markSuporteRead();state.page=id;renderNav();render();saveSession();document.getElementById('sidebar').classList.remove('open');window.scrollTo(0,0);}
 
 /* ===== Barra de navegação inferior (celular) ===== */
 const BOTTOM={
@@ -1695,6 +1731,7 @@ function render(){
     punch:colabPunch, history:colabHistory, acompanhar:colabAcompanhar, pontosAnteriores:colabPontosAnteriores, myadjust:colabAdjust, myabsences:colabAbsences, profile:colabProfile,
     employees:adminEmployees, registros:adminRegistros, adjustments:adminAdjustments, manualpunch:adminManualPunch, payroll:adminPayroll, schedules:adminSchedules,
     absences:adminAbsences, holidays:adminHolidays, reports:adminReports, logs:adminLogs,
+    suporte: state.role==='admin'?adminSuporte:colabSuporte,
   };
   // Rede de segurança extra: preserva valores já preenchidos por id, caso o render aconteça bem
   // no instante entre um campo perder o foco e o próximo ganhar foco.
@@ -2379,6 +2416,68 @@ function salvarSenha(){
   if(a.length<6){toast('Erro','A nova senha deve ter ao menos 6 caracteres.','err');return;}
   if(a!==b){toast('Erro','As senhas não conferem.','err');return;}
   closeModal();toast('Senha alterada','Sua senha foi atualizada com sucesso.','info');
+}
+
+/* ============================ SUPORTE (chat) ============================ */
+const SUP_NAME='Rafa';
+const SUP_EMOJI='👨‍💻';
+function suporteAvatar(sm){return `<div class="sup-avatar${sm?' sm':''}">${SUP_EMOJI}<span class="dot"></span></div>`;}
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtSupTime(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+// Marca como lidas as mensagens que "chegaram" pra quem está olhando a tela agora (colaborador lê
+// as respostas do Admin; Admin lê as mensagens do colaborador cuja conversa está aberta). Só grava
+// quando realmente havia algo não lido, pra não disparar saveNow() à toa a cada render().
+function markSuporteRead(){
+  if(!state.suporte)state.suporte=[];
+  if(state.role==='colab'&&state.user){
+    const mine=state.suporte.filter(m=>m.emp===state.user.nome&&m.from==='admin'&&!m.read);
+    if(!mine.length)return;
+    mine.forEach(m=>{m.read=true;m._ts=Date.now();});
+    saveNow();
+  }else if(state.role==='admin'&&suporteAdminSel){
+    const theirs=state.suporte.filter(m=>m.emp===suporteAdminSel&&m.from==='colab'&&!m.read);
+    if(!theirs.length)return;
+    theirs.forEach(m=>{m.read=true;m._ts=Date.now();});
+    saveNow();
+  }
+}
+function colabSuporte(){
+  const mine=(state.suporte||[]).filter(m=>m.emp===state.user.nome).sort((a,b)=>(a._ts||0)-(b._ts||0));
+  const intro=`<div class="sup-msg in">${suporteAvatar(true)}<div>
+    <div class="bub">Oi, ${state.user.nome.split(' ')[0]}! 👋 Eu sou o ${SUP_NAME}, do Suporte. Me conta sua sugestão, ideia de melhoria ou qualquer feedback sobre o sistema — leio tudo e repasso pro time responsável.</div>
+    <div class="meta">${SUP_NAME} • Suporte</div></div></div>`;
+  const msgs=mine.map(m=>m.from==='colab'
+    ?`<div class="sup-msg out"><div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">${fmtSupTime(m.at)}${m.read?' • visto':''}</div></div></div>`
+    :`<div class="sup-msg in">${suporteAvatar(true)}<div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">${SUP_NAME} • ${fmtSupTime(m.at)}</div></div></div>`
+  ).join('');
+  return `${head('Suporte','Sugestões, ideias de melhoria ou qualquer feedback — fale com a gente.')}
+  <div class="card">
+    <div class="sup-head">
+      ${suporteAvatar(false)}
+      <div><div class="sup-name">${SUP_NAME}</div><div class="sup-status">🟢 Online</div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="sup-thread" id="supThread">${intro}${msgs}</div>
+    <div class="sup-compose">
+      <textarea class="input" id="supMsg" placeholder="Escreva sua mensagem…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendSuporteMsg();}"></textarea>
+      <button class="btn primary" onclick="sendSuporteMsg()">Enviar</button>
+    </div>
+  </div>`;
+}
+function sendSuporteMsg(){
+  const el=document.getElementById('supMsg');
+  const msg=(el&&el.value||'').trim();
+  if(!msg)return;
+  if(!state.suporte)state.suporte=[];
+  state.suporte.push({id:Date.now()+Math.random(),_ts:Date.now(),emp:state.user.nome,from:'colab',msg,at:new Date().toISOString(),read:false});
+  state.logs.unshift({quem:state.user.nome,acao:'Enviou mensagem de suporte',alvo:msg.length>60?msg.slice(0,60)+'…':msg,ip:'201.9.88.3',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  pushNotif({for:'admin',ic:'🎧',c:'var(--c1)',t:'Nova mensagem de Suporte',s:`${state.user.nome}: ${msg.length>80?msg.slice(0,80)+'…':msg}`});
+  saveNow();render();
+  setTimeout(()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;},30);
 }
 
 /* ==================================================================== */
@@ -3626,6 +3725,58 @@ function adminLogs(){
   <div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Quem</th><th>Ação</th><th>Alvo / Detalhe</th><th>IP</th><th>Data / Hora</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
+}
+function adminSuporte(){
+  const all=state.suporte||[];
+  if(!suporteAdminSel){
+    const byEmp={};
+    all.forEach(m=>{(byEmp[m.emp]=byEmp[m.emp]||[]).push(m);});
+    const rows=Object.keys(byEmp).map(emp=>{
+      const msgs=byEmp[emp].slice().sort((a,b)=>(a._ts||0)-(b._ts||0));
+      const last=msgs[msgs.length-1];
+      const unread=msgs.filter(m=>m.from==='colab'&&!m.read).length;
+      const empObj=state.employees.find(e=>e.nome===emp);
+      return {emp,last,unread,av:empObj&&empObj.av};
+    }).sort((a,b)=>(b.last._ts||0)-(a.last._ts||0));
+    const list=rows.length?rows.map(r=>{
+      const preview=(r.last.from==='admin'?'Você: ':'')+escapeHtml((r.last.msg||'').slice(0,70))+((r.last.msg||'').length>70?'…':'');
+      return `<div class="mini-item sup-list-item" onclick="openSuporteThread('${r.emp.replace(/'/g,"\\'")}')">
+      ${r.av?`<img class="tavatar" src="${r.av}">`:`<div class="ic" style="background:var(--surface-2)">🎧</div>`}
+      <div class="txt"><b class="${r.unread?'unread':''}">${r.emp}</b><small>${preview}</small></div>
+      <span class="time">${fmtSupTime(r.last.at)}</span>
+    </div>`;
+    }).join(''):`<div class="sup-empty">Nenhuma mensagem de Suporte recebida ainda.</div>`;
+    return `${head('Suporte','Sugestões e feedback enviados pelos colaboradores.')}
+    <div class="card"><div class="mini-list">${list}</div></div>`;
+  }
+  markSuporteRead();
+  const mine=all.filter(m=>m.emp===suporteAdminSel).sort((a,b)=>(a._ts||0)-(b._ts||0));
+  const empObj=state.employees.find(e=>e.nome===suporteAdminSel);
+  const msgs=mine.length?mine.map(m=>m.from==='colab'
+    ?`<div class="sup-msg in">${empObj&&empObj.av?`<img class="tavatar" src="${empObj.av}" style="width:36px;height:36px;border-radius:50%">`:suporteAvatar(true)}<div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">${suporteAdminSel} • ${fmtSupTime(m.at)}</div></div></div>`
+    :`<div class="sup-msg out"><div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">${fmtSupTime(m.at)}${m.read?' • visto':''}</div></div></div>`
+  ).join(''):`<div class="sup-empty">Sem mensagens ainda.</div>`;
+  return `${head('Suporte',`Conversa com ${suporteAdminSel}`,`<button class="btn ghost" onclick="backSuporteList()">← Voltar</button>`)}
+  <div class="card">
+    <div class="sup-thread" id="supThread">${msgs}</div>
+    <div class="sup-compose">
+      <textarea class="input" id="supReply" placeholder="Responder ${suporteAdminSel}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendSuporteReply();}"></textarea>
+      <button class="btn primary" onclick="sendSuporteReply()">Enviar</button>
+    </div>
+  </div>`;
+}
+function openSuporteThread(emp){suporteAdminSel=emp;renderNav();render();setTimeout(()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;},30);}
+function backSuporteList(){suporteAdminSel=null;render();}
+function sendSuporteReply(){
+  const el=document.getElementById('supReply');
+  const msg=(el&&el.value||'').trim();
+  if(!msg||!suporteAdminSel)return;
+  if(!state.suporte)state.suporte=[];
+  state.suporte.push({id:Date.now()+Math.random(),_ts:Date.now(),emp:suporteAdminSel,from:'admin',msg,at:new Date().toISOString(),read:false});
+  state.logs.unshift({quem:'Admin',acao:'Respondeu mensagem de suporte',alvo:`${suporteAdminSel}: ${msg.length>60?msg.slice(0,60)+'…':msg}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  pushNotif({for:'colab',ic:'🎧',c:'var(--green)',t:'Resposta do Suporte',s:`${SUP_NAME}: ${msg.length>80?msg.slice(0,80)+'…':msg}`});
+  saveNow();render();renderNav();
+  setTimeout(()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;},30);
 }
 
 /* ============================ HELPERS ============================ */

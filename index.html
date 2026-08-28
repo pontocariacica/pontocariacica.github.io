@@ -1719,15 +1719,20 @@ function lineChart(data,{w=520,h=160,color='var(--c1)'}={}){
 let renderRetryTimer=null;
 function render(){
   const c=document.getElementById('content');
-  // Se a pessoa está com um campo de formulário em foco (principalmente um <select> com o menu
-  // nativo ABERTO), recriar o HTML agora fecharia o menu / atrapalharia a digitação no meio do
-  // processo — o navegador destrói o elemento antigo junto com qualquer seletor nativo aberto.
-  // Por isso a seleção de funcionário no Lançamento Manual não "pegava": bastava OUTRO
-  // colaborador bater ponto em qualquer lugar (o que dispara uma atualização em tempo real aqui)
-  // durante o clique no menu que ele fechava sozinho. Em vez disso, adia o render e tenta de novo
-  // logo em seguida, sem perder o que já estava sendo preenchido.
+  // Se a pessoa está com um <select> em foco com o menu nativo ABERTO, recriar o HTML agora
+  // fecharia o menu no meio do processo — o navegador destrói o elemento antigo junto com
+  // qualquer seletor nativo aberto. Por isso a seleção de funcionário no Lançamento Manual não
+  // "pegava": bastava OUTRO colaborador bater ponto em qualquer lugar (o que dispara uma
+  // atualização em tempo real aqui) durante o clique no menu que ele fechava sozinho. Em vez
+  // disso, adia o render e tenta de novo logo em seguida, sem perder o que já estava selecionado.
+  // IMPORTANTE: isso NÃO inclui mais INPUT/TEXTAREA — esses campos já têm seu valor, foco e
+  // posição do cursor preservados/restaurados logo abaixo, então adiar o render também pra eles só
+  // trazia um efeito colateral ruim: enquanto a pessoa estivesse com o cursor numa caixa de texto
+  // (ex.: parada na caixa de resposta do chat de Suporte esperando uma mensagem chegar), TODA
+  // atualização em tempo real do app ficava bloqueada indefinidamente — inclusive mensagens novas
+  // do Suporte, que pareciam simplesmente "não chegar" pro Admin.
   const active=document.activeElement;
-  if(active && c.contains(active) && ['INPUT','SELECT','TEXTAREA'].includes(active.tagName)){
+  if(active && c.contains(active) && active.tagName==='SELECT'){
     clearTimeout(renderRetryTimer);
     renderRetryTimer=setTimeout(render,700);
     return;
@@ -1749,6 +1754,18 @@ function render(){
         selEnd:(typeof el.selectionEnd==='number')?el.selectionEnd:null};
     }
   });
+  // Preserva a posição de rolagem de containers internos com scroll próprio que sobrevivem ao
+  // redesenho (ex.: a conversa de Suporte, #supThread). Sem isso, QUALQUER sincronização em tempo
+  // real que dispare um render() enquanto a pessoa está no meio da leitura de uma conversa antiga
+  // recria a lista de mensagens do zero e ela nasce com scrollTop 0 de novo — dando a sensação de
+  // "a conversa sempre volta lá pra cima" mesmo sem ninguém ter enviado mensagem nenhuma. Isso é
+  // sobrescrito de propósito por scrollSupThreadDown() logo depois de enviar/receber uma mensagem
+  // nova, que aí sim deve ir pro final.
+  const scrollPreserve={};
+  ['supThread'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)scrollPreserve[id]=el.scrollTop;
+  });
   c.innerHTML=(P[state.page]||(()=>'<div class="card">Em construção…</div>'))();
   Object.keys(preserved).forEach(id=>{
     const el=document.getElementById(id);
@@ -1763,6 +1780,10 @@ function render(){
       el.focus();
       if(p.selStart!==null&&el.setSelectionRange){try{el.setSelectionRange(p.selStart,p.selEnd);}catch(e){}}
     }
+  });
+  Object.keys(scrollPreserve).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.scrollTop=scrollPreserve[id];
   });
   tick();updateNotifBadge();updateJornadaLive();renderBottomNav();scheduleSave();
 }

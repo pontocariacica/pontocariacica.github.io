@@ -1031,6 +1031,13 @@ async function saveToCloudMerged(data){
     state.vacations=merged.vacations; state.deletedKeys=merged.deletedKeys;
     state.fechamentos=merged.fechamentos; state.punchesByEmp=merged.punchesByEmp; state.closedPeriods=merged.closedPeriods;
     state.holidays=merged.holidays; state.escalas=merged.escalas; state.logs=merged.logs;
+    // 'suporte' também passa por mesclagem (linha acima, mergeByIdLastWriteWinsSorted) mas ficou de
+    // fora desta lista por engano — sem isso, se o servidor já tinha uma mensagem que este aparelho
+    // ainda não conhecia (ex.: colaborador e Admin escrevendo quase ao mesmo tempo), o "state.suporte"
+    // local ficava desatualizado E o próximo onSnapshot do PRÓPRIO aparelho não corrigia isso, porque
+    // "lastPushed" já era marcado como igual ao dado mesclado (ver abaixo) — fazendo a mensagem do
+    // outro lado parecer que "demora" ou nunca chega pra quem acabou de enviar a sua.
+    state.suporte=merged.suporte;
   }
   const jsFinal=stableJSON(merged);
   lastPushed=jsFinal;

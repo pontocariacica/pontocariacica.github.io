@@ -2468,7 +2468,7 @@ function colabSuporte(){
     </div>
     <div class="divider"></div>
     <div class="sup-thread" id="supThread">${intro}${msgs}</div>
-    <div class="sup-compose">
+    <div class="sup-compose" id="supCompose">
       <textarea class="input" id="supMsg" placeholder="Escreva sua mensagem…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendSuporteMsg();}"></textarea>
       <button class="btn primary" onclick="sendSuporteMsg()">Enviar</button>
     </div>
@@ -2494,6 +2494,19 @@ async function callSuporteAI(msg,empName){
 function supTypingBubble(){
   return `<div class="sup-msg in sup-typing" id="supTypingBubble">${suporteAvatar(true)}<div><div class="bub"><i></i><i></i><i></i></div></div></div>`;
 }
+// Rola a conversa pro final — tanto a caixa de mensagens (scroll interno) quanto a página em volta
+// dela (scrollIntoView). Sem o scrollIntoView, toda vez que o chat re-renderizava (ao enviar uma
+// mensagem, ao a resposta automática chegar) a PÁGINA INTEIRA voltava pro topo, porque trocar o
+// HTML de um bloco grande da tela faz o navegador perder a posição de rolagem — daí a sensação de
+// "a conversa sempre volta lá pra cima".
+function scrollSupThreadDown(){
+  const t=document.getElementById('supThread');
+  if(t)t.scrollTop=t.scrollHeight;
+  // Rola a página até a caixa de digitar (não até o topo da conversa) — assim a última mensagem
+  // E o campo pra responder ficam visíveis juntos, em vez de "roubar" a tela toda pra bolha.
+  const compose=document.getElementById('supCompose');
+  if(compose)compose.scrollIntoView({block:'end',behavior:'auto'});
+}
 function sendSuporteMsg(){
   const el=document.getElementById('supMsg');
   const msg=(el&&el.value||'').trim();
@@ -2509,12 +2522,11 @@ function sendSuporteMsg(){
   state.logs.unshift({quem:empName,acao:'Enviou mensagem de suporte',alvo:msg.length>60?msg.slice(0,60)+'…':msg,ip:'201.9.88.3',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   pushNotif({for:'admin',ic:'🎧',c:'var(--c1)',t:'Nova mensagem de Suporte',s:`${empName}: ${msg.length>80?msg.slice(0,80)+'…':msg}`});
   saveNow();render();
-  const scrollDown=()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;};
-  setTimeout(scrollDown,30);
+  setTimeout(scrollSupThreadDown,30);
   // Mostra "Rafa está digitando…" enquanto a IA pensa a resposta (só se o colaborador ainda
   // estiver na tela de Suporte) e substitui pela resposta real assim que chegar.
   const thread=document.getElementById('supThread');
-  if(thread){thread.insertAdjacentHTML('beforeend',supTypingBubble());scrollDown();}
+  if(thread){thread.insertAdjacentHTML('beforeend',supTypingBubble());scrollSupThreadDown();}
   callSuporteAI(msg,empName).then(({reply,ai})=>{
     if(!state.suporte)state.suporte=[];
     // Se o colaborador ainda estiver com o chat aberto quando a resposta chegar, ela já nasce
@@ -2523,7 +2535,7 @@ function sendSuporteMsg(){
     const stillWatching=state.page==='suporte'&&state.role==='colab'&&state.user&&state.user.nome===empName;
     state.suporte.push({id:Date.now()+Math.random(),_ts:Date.now(),emp:empName,from:'rafa',msg:reply,at:new Date().toISOString(),read:stillWatching,ai});
     saveNow();renderNav();
-    if(stillWatching){render();setTimeout(scrollDown,30);}
+    if(stillWatching){render();setTimeout(scrollSupThreadDown,30);}
   });
 }
 
@@ -3808,13 +3820,13 @@ function adminSuporte(){
   return `${head('Suporte',`Conversa com ${suporteAdminSel}`,`<button class="btn ghost" onclick="backSuporteList()">← Voltar</button>`)}
   <div class="card">
     <div class="sup-thread" id="supThread">${msgs}</div>
-    <div class="sup-compose">
+    <div class="sup-compose" id="supCompose">
       <textarea class="input" id="supReply" placeholder="Responder ${suporteAdminSel}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendSuporteReply();}"></textarea>
       <button class="btn primary" onclick="sendSuporteReply()">Enviar</button>
     </div>
   </div>`;
 }
-function openSuporteThread(emp){suporteAdminSel=emp;renderNav();render();setTimeout(()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;},30);}
+function openSuporteThread(emp){suporteAdminSel=emp;renderNav();render();setTimeout(scrollSupThreadDown,30);}
 function backSuporteList(){suporteAdminSel=null;render();}
 function sendSuporteReply(){
   const el=document.getElementById('supReply');
@@ -3826,7 +3838,7 @@ function sendSuporteReply(){
   state.logs.unshift({quem:'Admin',acao:'Respondeu mensagem de suporte',alvo:`${suporteAdminSel}: ${msg.length>60?msg.slice(0,60)+'…':msg}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   pushNotif({for:'colab',ic:'🎧',c:'var(--green)',t:'Resposta do Suporte',s:`${SUP_NAME}: ${msg.length>80?msg.slice(0,80)+'…':msg}`});
   saveNow();render();renderNav();
-  setTimeout(()=>{const t=document.getElementById('supThread');if(t)t.scrollTop=t.scrollHeight;},30);
+  setTimeout(scrollSupThreadDown,30);
 }
 
 /* ============================ HELPERS ============================ */

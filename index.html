@@ -2498,6 +2498,11 @@ function sendSuporteMsg(){
   const el=document.getElementById('supMsg');
   const msg=(el&&el.value||'').trim();
   if(!msg)return;
+  // Limpa a caixa ANTES de render() — o render() preserva o valor atual de campos de formulário
+  // (pra não perder o que a pessoa está digitando se uma sincronização em segundo plano disparar
+  // um re-render no meio da digitação); se não limpar aqui primeiro, essa mesma proteção
+  // devolvia a mensagem já enviada de volta pra caixa de texto.
+  if(el)el.value='';
   if(!state.suporte)state.suporte=[];
   const empName=state.user.nome;
   state.suporte.push({id:Date.now()+Math.random(),_ts:Date.now(),emp:empName,from:'colab',msg,at:new Date().toISOString(),read:false});
@@ -3815,6 +3820,7 @@ function sendSuporteReply(){
   const el=document.getElementById('supReply');
   const msg=(el&&el.value||'').trim();
   if(!msg||!suporteAdminSel)return;
+  if(el)el.value='';
   if(!state.suporte)state.suporte=[];
   state.suporte.push({id:Date.now()+Math.random(),_ts:Date.now(),emp:suporteAdminSel,from:'admin',msg,at:new Date().toISOString(),read:false});
   state.logs.unshift({quem:'Admin',acao:'Respondeu mensagem de suporte',alvo:`${suporteAdminSel}: ${msg.length>60?msg.slice(0,60)+'…':msg}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});

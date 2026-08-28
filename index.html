@@ -2453,7 +2453,7 @@ function salvarSenha(){
 }
 
 /* ============================ SUPORTE (chat) ============================ */
-const SUP_NAME='Rafa';
+const SUP_NAME='CORE';
 const SUP_EMOJI='👨‍💻';
 function suporteAvatar(sm){return `<div class="sup-avatar${sm?' sm':''}">${SUP_EMOJI}<span class="dot"></span></div>`;}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -2503,7 +2503,7 @@ function colabSuporte(){
   </div>`;
 }
 // Resposta usada quando a IA não responde a tempo (offline, Supabase indisponível, erro da API
-// etc.) — assim o colaborador sempre recebe uma confirmação, mesmo se o Rafa "de verdade" falhar.
+// etc.) — assim o colaborador sempre recebe uma confirmação, mesmo se o CORE "de verdade" falhar.
 const SUP_FALLBACK_REPLY='Recebi sua mensagem e já estou encaminhando para o responsável dar continuidade. Obrigado pelo contato!';
 // Chama a Edge Function do Supabase (suporte-ai-reply) que usa uma IA (Gemini) pra escrever uma
 // resposta profissional compatível com o assunto da mensagem — a chave da IA fica só no servidor,
@@ -2551,7 +2551,7 @@ function sendSuporteMsg(){
   pushNotif({for:'admin',ic:'🎧',c:'var(--c1)',t:'Nova mensagem de Suporte',s:`${empName}: ${msg.length>80?msg.slice(0,80)+'…':msg}`});
   saveNow();render();
   setTimeout(scrollSupThreadDown,30);
-  // Mostra "Rafa está digitando…" enquanto a IA pensa a resposta (só se o colaborador ainda
+  // Mostra "CORE está digitando…" enquanto a IA pensa a resposta (só se o colaborador ainda
   // estiver na tela de Suporte) e substitui pela resposta real assim que chegar.
   const thread=document.getElementById('supThread');
   if(thread){thread.insertAdjacentHTML('beforeend',supTypingBubble());scrollSupThreadDown();}
@@ -3826,7 +3826,7 @@ function adminSuporte(){
       return {emp,last,unread,av:empObj&&empObj.av};
     }).sort((a,b)=>(b.last._ts||0)-(a.last._ts||0));
     const list=rows.length?rows.map(r=>{
-      const prefix=r.last.from==='admin'?'Você: ':r.last.from==='rafa'?'Rafa (IA): ':'';
+      const prefix=r.last.from==='admin'?'Você: ':r.last.from==='rafa'?`${SUP_NAME} (IA): `:'';
       const preview=prefix+escapeHtml((r.last.msg||'').slice(0,70))+((r.last.msg||'').length>70?'…':'');
       return `<div class="mini-item sup-list-item" onclick="openSuporteThread('${r.emp.replace(/'/g,"\\'")}')">
       ${r.av?`<img class="tavatar" src="${r.av}">`:`<div class="ic" style="background:var(--surface-2)">🎧</div>`}
@@ -3842,7 +3842,7 @@ function adminSuporte(){
   const empObj=state.employees.find(e=>e.nome===suporteAdminSel);
   const msgs=mine.length?mine.map(m=>{
     if(m.from==='colab')return `<div class="sup-msg in">${empObj&&empObj.av?`<img class="tavatar" src="${empObj.av}" style="width:36px;height:36px;border-radius:50%">`:suporteAvatar(true)}<div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">${suporteAdminSel} • ${fmtSupTime(m.at)}</div></div></div>`;
-    if(m.from==='rafa')return `<div class="sup-msg out ai">${suporteAvatar(true)}<div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">🤖 Rafa (resposta automática) • ${fmtSupTime(m.at)}</div></div></div>`;
+    if(m.from==='rafa')return `<div class="sup-msg out ai">${suporteAvatar(true)}<div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">🤖 ${SUP_NAME} (resposta automática) • ${fmtSupTime(m.at)}</div></div></div>`;
     return `<div class="sup-msg out"><div><div class="bub">${escapeHtml(m.msg)}</div><div class="meta">Você • ${fmtSupTime(m.at)}${m.read?' • visto':''}</div></div></div>`;
   }).join(''):`<div class="sup-empty">Sem mensagens ainda.</div>`;
   return `${head('Suporte',`Conversa com ${suporteAdminSel}`,`<button class="btn ghost" onclick="backSuporteList()">← Voltar</button>`)}

@@ -1557,6 +1557,14 @@ function bannerPeriodoAberto(){
 
 // Feriado cadastrado para a data (chave AAAA-MM-DD), ou null
 function feriadoDe(key){return (state.holidays||[]).find(h=>h.data===key)||null;}
+// Férias aprovadas do colaborador que cobrem essa data, ou null. "Aprovada" inclui tanto
+// 'agendada' (período ainda em curso/futuro) quanto 'concluída' (já passou — ver
+// advanceVacationStatuses) — nunca 'pendente' (ainda não decidida) nem 'reprovada'. Usado tanto
+// pra bloquear o registro de ponto (registroBloqueado) quanto pra manter o período marcado como
+// "Férias" no histórico/relatórios mesmo depois que o status virar "concluída".
+function feriasDe(empName,dateKey){
+  return (state.vacations||[]).find(v=>v.emp===empName&&(v.status==='agendada'||v.status==='concluída')&&v.ini&&v.fim&&dateKey>=v.ini&&dateKey<=v.fim)||null;
+}
 // Próximo feriado a partir de hoje (nacional ou estadual, o que vier primeiro) — usado no card
 // "Próximo feriado" da tela inicial do colaborador.
 function proximoFeriado(){
@@ -1570,6 +1578,10 @@ function registroBloqueado(dateKey,dow){
   if(dow===0 && !cfg.liberarDomingo) return {motivo:'domingo',msg:'Registro aos domingos requer liberação do administrador.'};
   const h=feriadoDe(dateKey);
   if(h && !cfg.liberarFeriado && !h.liberado) return {motivo:'feriado',msg:`Registro em feriado (${h.nome}) requer liberação do administrador.`};
+  // Férias aprovadas bloqueiam o registro de ponto no período — pedido do administrador: uma vez
+  // aprovada a solicitação, o colaborador não deve bater ponto durante a viagem.
+  const v=state.user&&feriasDe(state.user.nome,dateKey);
+  if(v) return {motivo:'ferias',msg:`Você está de férias (${fmtd(v.ini)} a ${fmtd(v.fim)}) — o registro de ponto fica bloqueado nesse período.`};
   return null;
 }
 async function registrarPonto(btn,force){
@@ -1726,7 +1738,7 @@ function punchHero(){
   const bloq=registroBloqueado(todayKey(),dow);
   const blocked=!!bloq;
   const steps=SCHED.map(s=>`<div class="tl-step ${t[s]?'filled':''}"><div class="k">${SCHED_LABEL[s]}</div><div class="t">${t[s]?t[s].time:'--:--'}</div></div>`).join('');
-  const btnLabel = blocked?(bloq.motivo==='feriado'?'Feriado bloqueado':'Domingo bloqueado') : next?('Registrar '+SCHED_LABEL[next]):'Jornada concluída';
+  const btnLabel = blocked?(bloq.motivo==='feriado'?'Feriado bloqueado':bloq.motivo==='ferias'?'Em férias':'Domingo bloqueado') : next?('Registrar '+SCHED_LABEL[next]):'Jornada concluída';
   return `<div class="punch-hero">
     <div>
       <div class="punch-clock" id="punchClock">--:--:--</div>
@@ -1738,7 +1750,7 @@ function punchHero(){
       <button class="punch-btn ${(!next||blocked)?'done':''}" ${(!next||blocked)?'disabled':''} onclick="registrarPonto(this)">
         <span class="big">${blocked?'🚫':next?'⏱️':'✅'}</span>
         <span class="lbl">${btnLabel}</span>
-        <small style="font-weight:600;opacity:.9;font-size:13px">${blocked?'Solicite liberação ao admin':next?'Toque para registrar com sua localização':'Bom trabalho hoje!'}</small>
+        <small style="font-weight:600;opacity:.9;font-size:13px">${blocked?(bloq.motivo==='ferias'?'Aproveite suas férias! 🏖️':'Solicite liberação ao admin'):next?'Toque para registrar com sua localização':'Bom trabalho hoje!'}</small>
       </button>
     </div>
   </div>`;
@@ -1882,7 +1894,7 @@ function colabPunch(){
       <div class="divider"></div>
       <div style="font-size:13px;color:var(--text-2);line-height:1.7">
         ⚠️ A <b>localização é obrigatória</b>. Se você negar o acesso, o registro não é permitido.<br>
-        🚫 Domingos e feriados ficam bloqueados até liberação do administrador.
+        🚫 Domingos e feriados ficam bloqueados até liberação do administrador. Períodos de férias aprovados também ficam bloqueados.
       </div>
     </div>
   </div>`;
@@ -2059,7 +2071,7 @@ function collectPonto(empName,keep){
   // como férias (na folha, na impressão e no histórico), em vez de ficarem em branco. Só marca o
   // dia como férias quando NÃO há nenhum registro real batido nele — se por algum motivo houver
   // um ponto no meio do período de férias, ele continua aparecendo normalmente, sem esconder nada.
-  (state.vacations||[]).filter(v=>v.emp===empName&&v.status==='agendada'&&v.ini&&v.fim).forEach(v=>{
+  (state.vacations||[]).filter(v=>v.emp===empName&&(v.status==='agendada'||v.status==='concluída')&&v.ini&&v.fim).forEach(v=>{
     let cur=new Date(v.ini+'T12:00:00');
     const fim=new Date(v.fim+'T12:00:00');
     while(cur<=fim){
@@ -3554,7 +3566,7 @@ function reportData(name){
         const key=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
         if(key>tk)break; // não considera dias futuros
         const dow=cur.getDay();
-        const emFerias=(state.vacations||[]).some(v=>v.emp===e.nome&&v.status==='agendada'&&key>=v.ini&&key<=v.fim);
+        const emFerias=(state.vacations||[]).some(v=>v.emp===e.nome&&(v.status==='agendada'||v.status==='concluída')&&key>=v.ini&&key<=v.fim);
         const emAfastamento=(state.afastamentos||[]).some(a=>a.emp===e.nome&&key>=a.ini&&key<=a.fim);
         if(dow!==0&&!feriadoDe(key)&&!emFerias&&!emAfastamento&&!comPonto.has(key))rows.push([e.nome,fmtd(key),semana[dow]]);
         cur.setDate(cur.getDate()+1);

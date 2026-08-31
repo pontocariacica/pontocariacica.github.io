@@ -1637,6 +1637,23 @@ function diaBloqueadoParaAuto(empNome,dateKey,dow){
   return false;
 }
 const AUTO_PREENCHIMENTO_LIMITE_DIAS=14; // nunca retroage mais que isso numa única varredura
+// Remove um registro auto-gerado (id determinístico auto:<empId>:<data>:<tipo>) que ficou
+// indevido — hoje em dia usado quando um sábado deixa de ser elegível pro preenchimento
+// automático (colaborador sem jornadaSab cadastrada) mas já existia um registro auto: criado
+// numa varredura anterior (quando a regra ainda não existia ou a jornada ainda não tinha sido
+// definida). Espelha exatamente os passos de confirmarExcluirRegistro pra sincronizar certo
+// entre aparelhos. Nunca mexe em registros com outro id (ponto real batido ou ajuste aprovado).
+function removerAutoIndevido(emp,key,tipo){
+  const id='auto:'+emp.id+':'+key+':'+tipo;
+  const idx=state.registros.findIndex(r=>r.id===id);
+  if(idx<0)return false;
+  const r=state.registros[idx];
+  state.registros.splice(idx,1);
+  deleteRegistroFromSupabase(r.id);
+  if(!state.deletedKeys)state.deletedKeys=[];
+  state.deletedKeys.push({k:'reg:'+regMergeKey(r),at:new Date().toISOString()});
+  return true;
+}
 function autoPreencherPontosEsquecidos(){
   let mudou=false;
   (state.employees||[]).filter(e=>e.status!=='inativo').forEach(emp=>{
@@ -1652,7 +1669,18 @@ function autoPreencherPontosEsquecidos(){
       if(isPeriodClosed(emp.nome,periodBounds(d)))continue; // período já fechado — não mexe mais
       // Jornada do dia: sábado usa jornadaSab (horário próprio de cada colaborador, cadastrado no
       // perfil dele — ex.: um até 12h, outro até 11h), senão usa a jornada normal de segunda a sexta.
+      // Se for sábado e o colaborador NÃO tem jornadaSab cadastrada, o horário de sábado dele é
+      // desconhecido — não dá pra inventar (antes isso caía errado na jornada cheia de
+      // segunda-sexta, ex.: preencheu 08:00–17:00 num sábado de alguém que na real trabalha só
+      // até meio-dia). Nesse caso pulamos o preenchimento e, se um sábado anterior já tinha sido
+      // preenchido errado por essa mesma falta de cadastro, desfazemos.
       const isSat=dow===6;
+      if(isSat&&!emp.jornadaSab){
+        const desfezEntrada=removerAutoIndevido(emp,key,'Entrada');
+        const desfezSaida=removerAutoIndevido(emp,key,'Saída');
+        if(desfezEntrada||desfezSaida)mudou=true;
+        continue;
+      }
       const j=(isSat&&emp.jornadaSab)?emp.jornadaSab:(emp.jornada||'08:00–17:00');
       const partes=j.split(/[–-]/).map(s=>s.trim());
       const ini=partes[0]||'08:00',fim=partes[1]||'17:00';

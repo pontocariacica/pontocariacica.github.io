@@ -1093,6 +1093,9 @@ function initPersistence(){
       cloudLoaded=true;sessionReady=true;restoreSession();refreshUI();
       if(firstSync){
         firstSync=false;
+        // Preenche pontos esquecidos de qualquer colaborador (ver função) antes de gravar de volta,
+        // pra já ir tudo numa só gravação.
+        try{autoPreencherPontosEsquecidos();}catch(e){console.warn('Preenchimento automático de ponto falhou:',e&&e.message);}
         // Se a mesclagem trouxe do cache local algo que o servidor ainda não tinha (um ponto batido
         // pouco antes de fechar o app, por exemplo), grava de volta agora — "cura" a diferença sem
         // esperar a próxima ação do usuário.
@@ -1602,6 +1605,75 @@ function autoFecharPeriodoAnterior(){
 function bannerPeriodoAberto(){
   if(previousPeriodOpen())autoFecharPeriodoAnterior();
   return '';
+}
+
+/* ===== Preenchimento automático de pontos esquecidos =====
+   Se o colaborador esquecer de bater Entrada e/ou Saída num dia normal de trabalho, o sistema
+   preenche sozinho no dia seguinte, usando o horário de jornada cadastrado dele (jornadaSab aos
+   sábados, se houver) — sem pedir nada a ninguém, e o registro fica idêntico a um ponto batido
+   manualmente (mesma estrutura de dados, sem nenhum campo ou marca que diferencie um do outro na
+   tela). Se algum dia o Admin precisar corrigir (ex.: o colaborador realmente faltou), o registro
+   pode ser editado/excluído normalmente, do mesmo jeito que qualquer outro.
+
+   Roda uma vez por sessão, logo após o primeiro carregamento dos dados da nuvem (ver
+   initPersistence/firstSync) — pra qualquer pessoa que abrir o app, Admin ou colaborador, já que
+   os registros de todo mundo ficam no mesmo documento compartilhado. Como o app é reaberto todo
+   dia por alguém (é assim que os colaboradores batem ponto), isso cobre "o dia seguinte" na
+   prática sem precisar de nenhum temporizador rodando em segundo plano.
+
+   Usa um id determinístico (ver mergeRegistros/regMergeKey) em vez de newId() — se dois aparelhos
+   decidirem preencher o mesmo dia esquecido quase ao mesmo tempo, a mesclagem colapsa os dois em
+   um só automaticamente, em vez de duplicar o registro. */
+// Réplica de registroBloqueado() mas para um funcionário arbitrário — registroBloqueado() usa
+// state.user internamente (o colaborador LOGADO), o que não serve aqui: o Admin ou qualquer
+// colaborador pode disparar essa checagem e ela precisa avaliar cada funcionário pelo nome dele,
+// não pelo usuário da sessão atual.
+function diaBloqueadoParaAuto(empNome,dateKey,dow){
+  const cfg=state.config||{};
+  if(dow===0 && !cfg.liberarDomingo) return true;
+  const h=feriadoDe(dateKey);
+  if(h && !cfg.liberarFeriado && !h.liberado) return true;
+  if(feriasDe(empNome,dateKey)) return true;
+  return false;
+}
+const AUTO_PREENCHIMENTO_LIMITE_DIAS=14; // nunca retroage mais que isso numa única varredura
+function autoPreencherPontosEsquecidos(){
+  let mudou=false;
+  (state.employees||[]).filter(e=>e.status!=='inativo').forEach(emp=>{
+    const meusRegistros=state.registros.filter(r=>r.emp===emp.nome);
+    if(!meusRegistros.length)return; // nunca bateu ponto ainda — nada a completar
+    const primeiraData=meusRegistros.reduce((min,r)=>(r.data&&r.data<min)?r.data:min,meusRegistros[0].data);
+    for(let i=1;i<=AUTO_PREENCHIMENTO_LIMITE_DIAS;i++){
+      const d=new Date();d.setDate(d.getDate()-i);
+      const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(key<primeiraData)break; // não retroage antes do primeiro ponto real do colaborador
+      const dow=d.getDay();
+      if(diaBloqueadoParaAuto(emp.nome,key,dow))continue; // domingo/feriado/férias — não é dia de trabalho
+      if(isPeriodClosed(emp.nome,periodBounds(d)))continue; // período já fechado — não mexe mais
+      const doDia=meusRegistros.filter(r=>r.data===key);
+      const temEntrada=doDia.some(r=>r.tipo==='Entrada');
+      const temSaida=doDia.some(r=>r.tipo==='Saída');
+      if(temEntrada&&temSaida)continue;
+      const isSat=dow===6;
+      const j=(isSat&&emp.jornadaSab)?emp.jornadaSab:(emp.jornada||'08:00–17:00');
+      const partes=j.split(/[–-]/).map(s=>s.trim());
+      const ini=partes[0]||'08:00',fim=partes[1]||'17:00';
+      const agora=new Date().toISOString();
+      if(!temEntrada){
+        const novo={id:'auto:'+emp.id+':'+key+':Entrada',emp:emp.nome,data:key,tipo:'Entrada',hora:ini,at:agora};
+        state.registros.push(novo);meusRegistros.push(novo);
+        sendRegistroToSupabase(novo);
+        mudou=true;
+      }
+      if(!temSaida){
+        const novo={id:'auto:'+emp.id+':'+key+':Saída',emp:emp.nome,data:key,tipo:'Saída',hora:fim,at:agora};
+        state.registros.push(novo);meusRegistros.push(novo);
+        sendRegistroToSupabase(novo);
+        mudou=true;
+      }
+    }
+  });
+  if(mudou)saveNow();
 }
 
 // Feriado cadastrado para a data (chave AAAA-MM-DD), ou null

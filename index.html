@@ -1026,6 +1026,20 @@ async function saveToCloudMerged(data){
     console.warn(`Queda em ${suspect.key} liberada após ${Math.round(waited/1000)}s — tratando como alteração intencional.`);
   }
   shrinkBlockSince=null;shrinkBlockNotified=false;
+  // Notificações e logs só entram por união a cada mesclagem (um lado nunca reduz o outro, ver
+  // mergeByIdLastWriteWinsSorted/mergeLogs) — e esse "merged" completo, SEM CORTE, é exatamente o
+  // que ia direto pro Firestore logo abaixo (ref.set). O corte de tamanho (trimGrowth) só existia
+  // em saveNow(), aplicado no "state" local antes de montar o payload — mas o payload que este
+  // aparelho monta já parte de um "remoto" não cortado, então a mesclagem sempre voltava a crescer
+  // de novo. Resultado real observado em produção: 904 notificações (deveriam ser no máx. 250) e
+  // 799 logs (máx. 500), ~700KB e subindo a cada gravação, se aproximando do limite de 1MB por
+  // documento do Firestore — quando um documento estoura esse limite, TODA gravação passa a falhar
+  // silenciosamente (só um console.warn, sem toast nem aviso), e é isso que explica solicitações
+  // (ajuste, Suporte etc.) que "não chegam" ao Admin: o envio nem chega a ser aceito pelo servidor.
+  // Aplicado DEPOIS do suspiciousShrink (que compara com o "remoto" ainda sem corte) pra não
+  // disparar um bloqueio de segurança por engano toda vez que este corte intencional acontecer.
+  merged.notifications=(merged.notifications||[]).slice(0,250);
+  merged.logs=(merged.logs||[]).slice(0,500);
   if(!applyingRemote){
     state.registros=merged.registros; state.adjustments=merged.adjustments; state.notifications=merged.notifications;
     state.vacations=merged.vacations; state.deletedKeys=merged.deletedKeys;

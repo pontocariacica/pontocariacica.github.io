@@ -1650,25 +1650,42 @@ function autoPreencherPontosEsquecidos(){
       const dow=d.getDay();
       if(diaBloqueadoParaAuto(emp.nome,key,dow))continue; // domingo/feriado/férias — não é dia de trabalho
       if(isPeriodClosed(emp.nome,periodBounds(d)))continue; // período já fechado — não mexe mais
-      const doDia=meusRegistros.filter(r=>r.data===key);
-      const temEntrada=doDia.some(r=>r.tipo==='Entrada');
-      const temSaida=doDia.some(r=>r.tipo==='Saída');
-      if(temEntrada&&temSaida)continue;
+      // Jornada do dia: sábado usa jornadaSab (horário próprio de cada colaborador, cadastrado no
+      // perfil dele — ex.: um até 12h, outro até 11h), senão usa a jornada normal de segunda a sexta.
       const isSat=dow===6;
       const j=(isSat&&emp.jornadaSab)?emp.jornadaSab:(emp.jornada||'08:00–17:00');
       const partes=j.split(/[–-]/).map(s=>s.trim());
       const ini=partes[0]||'08:00',fim=partes[1]||'17:00';
+      const doDia=meusRegistros.filter(r=>r.data===key);
+      const entradaAtual=doDia.find(r=>r.tipo==='Entrada');
+      const saidaAtual=doDia.find(r=>r.tipo==='Saída');
       const agora=new Date().toISOString();
-      if(!temEntrada){
-        const novo={id:'auto:'+emp.id+':'+key+':Entrada',emp:emp.nome,data:key,tipo:'Entrada',hora:ini,at:agora};
+      const idEntrada='auto:'+emp.id+':'+key+':Entrada';
+      const idSaida='auto:'+emp.id+':'+key+':Saída';
+      if(!entradaAtual){
+        const novo={id:idEntrada,emp:emp.nome,data:key,tipo:'Entrada',hora:ini,at:agora};
         state.registros.push(novo);meusRegistros.push(novo);
         sendRegistroToSupabase(novo);
         mudou=true;
+      }else if(entradaAtual.id===idEntrada&&entradaAtual.hora!==ini){
+        // Ponto que o PRÓPRIO sistema preencheu antes (mesmo id determinístico) — se a jornada de
+        // sábado do colaborador foi corrigida no cadastro depois disso (ex.: o Admin ajustou de
+        // 12h pra 11h), o valor antigo preenchido automaticamente ficava errado pra sempre, porque
+        // a checagem só olhava "já existe algum registro?" e nunca revisitava. Como o id só existe
+        // pra registros gerados por aqui (nunca um ponto batido de verdade ou editado por humano,
+        // que têm outro id), é seguro atualizar o horário pra acompanhar o cadastro atual.
+        entradaAtual.hora=ini;entradaAtual.at=agora;
+        sendRegistroToSupabase(entradaAtual);
+        mudou=true;
       }
-      if(!temSaida){
-        const novo={id:'auto:'+emp.id+':'+key+':Saída',emp:emp.nome,data:key,tipo:'Saída',hora:fim,at:agora};
+      if(!saidaAtual){
+        const novo={id:idSaida,emp:emp.nome,data:key,tipo:'Saída',hora:fim,at:agora};
         state.registros.push(novo);meusRegistros.push(novo);
         sendRegistroToSupabase(novo);
+        mudou=true;
+      }else if(saidaAtual.id===idSaida&&saidaAtual.hora!==fim){
+        saidaAtual.hora=fim;saidaAtual.at=agora;
+        sendRegistroToSupabase(saidaAtual);
         mudou=true;
       }
     }

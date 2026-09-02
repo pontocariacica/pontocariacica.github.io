@@ -3285,8 +3285,35 @@ function openAjusteEdit(id){
 // (horaOriginal) na primeira vez, para manter rastreabilidade do que foi alterado.
 function aplicarAjusteNoRegistro(a){
   const emp=state.employees.find(e=>e.nome===a.emp);
-  let r=state.registros.find(x=>x.emp===a.emp&&x.data===a.data&&x.tipo===a.tipo);
   const nowIso=new Date().toISOString();
+  // Duas cópias podem existir pro MESMO dia+tipo de um colaborador (ex.: dois aparelhos, cada um
+  // com uma visão momentaneamente desatualizada, criando/preenchendo o mesmo ponto quase ao mesmo
+  // tempo) — a mesclagem entre aparelhos nunca junta isso sozinha, porque ela identifica cada
+  // registro pelo "id" (que é diferente em cada cópia), nunca por dia+tipo. Sem saneamento aqui,
+  // aprovar um ajuste podia "não ter efeito nenhum" pra quem olhava: a correção era gravada em UMA
+  // cópia, mas a tela que a pessoa via mostrava a OUTRA, ainda com o horário antigo.
+  const iguais=state.registros.filter(x=>x.emp===a.emp&&x.data===a.data&&x.tipo===a.tipo);
+  let r=null;
+  if(iguais.length>1){
+    // Mantém a cópia mais confiável (já ajustada antes, se houver; senão a mais recente) e remove
+    // as demais do mesmo jeito que uma exclusão manual (splice + deletedKeys + fila de exclusão no
+    // Supabase), pra sincronizar certo entre todos os aparelhos.
+    iguais.sort((x,y)=>{
+      const xa=x.ajustado?1:0, ya=y.ajustado?1:0;
+      if(xa!==ya)return ya-xa;
+      return (regTs(y)||0)-(regTs(x)||0);
+    });
+    r=iguais[0];
+    iguais.slice(1).forEach(dup=>{
+      const idx=state.registros.indexOf(dup);
+      if(idx>=0)state.registros.splice(idx,1);
+      deleteRegistroFromSupabase(dup.id);
+      if(!state.deletedKeys)state.deletedKeys=[];
+      state.deletedKeys.push({k:'reg:'+regMergeKey(dup),at:nowIso});
+    });
+  }else if(iguais.length===1){
+    r=iguais[0];
+  }
   if(r){
     if(r.horaOriginal===undefined)r.horaOriginal=r.hora;
     r.hora=a.para;

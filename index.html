@@ -1110,6 +1110,7 @@ function initPersistence(){
         // Preenche pontos esquecidos de qualquer colaborador (ver função) antes de gravar de volta,
         // pra já ir tudo numa só gravação.
         try{autoPreencherPontosEsquecidos();}catch(e){console.warn('Preenchimento automático de ponto falhou:',e&&e.message);}
+        try{consolidarRegistrosDuplicados();}catch(e){console.warn('Consolidação de registros duplicados falhou:',e&&e.message);}
         // Se a mesclagem trouxe do cache local algo que o servidor ainda não tinha (um ponto batido
         // pouco antes de fechar o app, por exemplo), grava de volta agora — "cura" a diferença sem
         // esperar a próxima ação do usuário.
@@ -1731,6 +1732,47 @@ function autoPreencherPontosEsquecidos(){
         mudou=true;
       }
     }
+  });
+  if(mudou)saveNow();
+}
+// Junta registros duplicados (mesmo colaborador+data+tipo) que uma corrida de sincronização criou
+// ANTES da correção em aplicarAjusteNoRegistro (commit 3884af4) — dois aparelhos, cada um com uma
+// visão momentaneamente desatualizada do estado, criando/editando o "mesmo" ponto ao mesmo tempo.
+// Sem isso, essas duplicatas antigas ficariam paradas pra sempre: a mesclagem entre aparelhos nunca
+// as junta sozinha, porque identifica cada registro pelo "id" (diferente em cada cópia), nunca por
+// dia+tipo. Roda uma vez por sincronização, só mexendo em grupos com mais de uma cópia.
+// Critério de escolha (do mais confiável pro menos confiável): (1) corrigido por ajuste aprovado
+// — mas só quando TODAS as cópias "ajustadas" do grupo têm o MESMO horário; se houver duas
+// correções aprovadas com horários DIFERENTES, é uma divergência real que só um humano pode
+// decidir, e a função não mexe nesse grupo; (2) cópia real (não veio do preenchimento automático,
+// id começando com "auto:"); (3) a mais recente (r.at). As cópias descartadas são removidas do
+// mesmo jeito que uma exclusão manual (splice + deletedKeys + fila de exclusão no Supabase), pra
+// sincronizar certo entre todos os aparelhos.
+function consolidarRegistrosDuplicados(){
+  let mudou=false;
+  const grupos={};
+  state.registros.forEach(r=>{
+    const k=r.emp+'|'+r.data+'|'+r.tipo;
+    (grupos[k]=grupos[k]||[]).push(r);
+  });
+  const nowIso=new Date().toISOString();
+  Object.values(grupos).filter(g=>g.length>1).forEach(regs=>{
+    const horasAjustadas=new Set(regs.filter(r=>r.ajustado).map(r=>r.hora));
+    if(horasAjustadas.size>1)return; // duas correções conflitantes — precisa de decisão humana
+    const scored=regs.slice().sort((a,b)=>{
+      const scoreOf=r=>(r.ajustado?2:0)+(String(r.id).startsWith('auto:')?0:1);
+      const sa=scoreOf(a),sb=scoreOf(b);
+      if(sa!==sb)return sb-sa;
+      return (regTs(b)||0)-(regTs(a)||0);
+    });
+    scored.slice(1).forEach(dup=>{
+      const idx=state.registros.indexOf(dup);
+      if(idx>=0)state.registros.splice(idx,1);
+      deleteRegistroFromSupabase(dup.id);
+      if(!state.deletedKeys)state.deletedKeys=[];
+      state.deletedKeys.push({k:'reg:'+regMergeKey(dup),at:nowIso});
+      mudou=true;
+    });
   });
   if(mudou)saveNow();
 }
@@ -2992,9 +3034,12 @@ function toggleLiberacao(tipo){
 function inserirPontoManual(emp,data,tipo,hora,obs){
   const janta=(tipo==='Saída'&&hora>'18:59');
   const nowIso=new Date().toISOString();
-  // Se já existe um registro desse tipo nesse dia, CORRIGE em vez de criar outro — lançar
-  // manual de novo pro mesmo dia/tipo antes gerava registros duplicados e conflitantes.
-  let r=state.registros.find(x=>x.emp===emp.nome&&x.data===data&&x.tipo===tipo);
+  // Se já existe um registro desse tipo nesse dia, CORRIGE em vez de criar outro — lançar manual de
+  // novo pro mesmo dia/tipo antes gerava registros duplicados e conflitantes. E se já existir mais
+  // de UMA cópia (sobra de uma corrida de sincronização antiga), consolida antes de editar — senão
+  // o lançamento manual podia acabar corrigindo a cópia errada, exatamente como acontecia com os
+  // ajustes antes da correção em aplicarAjusteNoRegistro.
+  let r=encontrarOuConsolidarRegistro(emp.nome,data,tipo);
   if(r){
     if(r.horaOriginal===undefined)r.horaOriginal=r.hora;
     r.hora=hora;r.ajustado=true;r.manual=true;r.janta=janta;
@@ -3279,6 +3324,35 @@ function openAjusteEdit(id){
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
   <button class="btn primary" onclick="realizarAjuste(${id})">Salvar ajuste</button></div>`});
 }
+// Ponto único de busca "segura" por um registro existente de um dia+tipo: se houver mais de uma
+// cópia (corrida de sincronização — dois aparelhos, cada um com uma visão momentaneamente
+// desatualizada, criando/editando o "mesmo" ponto quase ao mesmo tempo), consolida todas numa só
+// ANTES de devolver, em vez de silenciosamente editar só a primeira que aparecer e deixar a outra
+// intacta por aí — foi exatamente isso que fazia uma correção aprovada "não ter efeito nenhum" pra
+// quem olhava: a mudança era gravada numa cópia, mas a tela mostrava a outra, com o valor antigo.
+// Usado tanto ao aplicar um ajuste aprovado quanto ao lançar um ponto manual — os dois lugares do
+// sistema que editam um registro "achando-o" por emp+data+tipo em vez de por id.
+function encontrarOuConsolidarRegistro(empNome,data,tipo){
+  const iguais=state.registros.filter(x=>x.emp===empNome&&x.data===data&&x.tipo===tipo);
+  if(iguais.length<=1)return iguais[0]||null;
+  // Mantém a cópia mais confiável (já ajustada antes, se houver; senão a mais recente) e remove as
+  // demais do mesmo jeito que uma exclusão manual (splice + deletedKeys + fila de exclusão no
+  // Supabase), pra sincronizar certo entre todos os aparelhos.
+  const nowIso=new Date().toISOString();
+  iguais.sort((x,y)=>{
+    const xa=x.ajustado?1:0, ya=y.ajustado?1:0;
+    if(xa!==ya)return ya-xa;
+    return (regTs(y)||0)-(regTs(x)||0);
+  });
+  iguais.slice(1).forEach(dup=>{
+    const idx=state.registros.indexOf(dup);
+    if(idx>=0)state.registros.splice(idx,1);
+    deleteRegistroFromSupabase(dup.id);
+    if(!state.deletedKeys)state.deletedKeys=[];
+    state.deletedKeys.push({k:'reg:'+regMergeKey(dup),at:nowIso});
+  });
+  return iguais[0];
+}
 // Aplica o horário aprovado/realizado de um ajuste diretamente no registro de ponto original,
 // para que o horário corrigido apareça em TODAS as telas (Registros & Local, Ver ponto, mapa,
 // espelho, etc.) e não só nos relatórios que recalculavam por cima. Guarda o horário original
@@ -3286,34 +3360,7 @@ function openAjusteEdit(id){
 function aplicarAjusteNoRegistro(a){
   const emp=state.employees.find(e=>e.nome===a.emp);
   const nowIso=new Date().toISOString();
-  // Duas cópias podem existir pro MESMO dia+tipo de um colaborador (ex.: dois aparelhos, cada um
-  // com uma visão momentaneamente desatualizada, criando/preenchendo o mesmo ponto quase ao mesmo
-  // tempo) — a mesclagem entre aparelhos nunca junta isso sozinha, porque ela identifica cada
-  // registro pelo "id" (que é diferente em cada cópia), nunca por dia+tipo. Sem saneamento aqui,
-  // aprovar um ajuste podia "não ter efeito nenhum" pra quem olhava: a correção era gravada em UMA
-  // cópia, mas a tela que a pessoa via mostrava a OUTRA, ainda com o horário antigo.
-  const iguais=state.registros.filter(x=>x.emp===a.emp&&x.data===a.data&&x.tipo===a.tipo);
-  let r=null;
-  if(iguais.length>1){
-    // Mantém a cópia mais confiável (já ajustada antes, se houver; senão a mais recente) e remove
-    // as demais do mesmo jeito que uma exclusão manual (splice + deletedKeys + fila de exclusão no
-    // Supabase), pra sincronizar certo entre todos os aparelhos.
-    iguais.sort((x,y)=>{
-      const xa=x.ajustado?1:0, ya=y.ajustado?1:0;
-      if(xa!==ya)return ya-xa;
-      return (regTs(y)||0)-(regTs(x)||0);
-    });
-    r=iguais[0];
-    iguais.slice(1).forEach(dup=>{
-      const idx=state.registros.indexOf(dup);
-      if(idx>=0)state.registros.splice(idx,1);
-      deleteRegistroFromSupabase(dup.id);
-      if(!state.deletedKeys)state.deletedKeys=[];
-      state.deletedKeys.push({k:'reg:'+regMergeKey(dup),at:nowIso});
-    });
-  }else if(iguais.length===1){
-    r=iguais[0];
-  }
+  let r=encontrarOuConsolidarRegistro(a.emp,a.data,a.tipo);
   if(r){
     if(r.horaOriginal===undefined)r.horaOriginal=r.hora;
     r.hora=a.para;

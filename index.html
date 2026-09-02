@@ -2302,14 +2302,19 @@ function collectPonto(empName,keep){
     const day=ensure(r.data);
     if(r.tipo==='Entrada')day.entrada=r.hora;
     else if(r.tipo==='Saída')day.saida=r.hora;
+    if(r.ajustado)day.adj=true;
   });
-  // Ajustes aprovados/realizados corrigem ou adicionam o horário do dia
-  state.adjustments.filter(a=>a.emp===empName&&(a.status==='aprovado'||a.status==='realizado')&&a.data&&a.data<=tkMax&&keep(a.data)).forEach(a=>{
-    const day=ensure(a.data);
-    if(a.tipo==='Entrada')day.entrada=a.para;
-    else if(a.tipo==='Saída')day.saida=a.para;
-    day.adj=true;
-  });
+  // NOTA (bug real reportado pelo Marcio — "ajustando, mas não muda"): antes, este trecho pegava
+  // TODO ajuste aprovado/realizado em state.adjustments e sobrescrevia o horário do dia por cima
+  // do que já estava calculado a partir do registro, sem checar se aquele ajuste ainda é a
+  // explicação atual do valor. Como cada solicitação vira uma entrada PRÓPRIA (por id) nesse
+  // array e nunca é removida depois de aplicada, se o registro fosse corrigido de novo por
+  // outro caminho depois (lançamento manual, nova consolidação de duplicata, um ajuste mais
+  // recente), o ajuste antigo — já superado — continuava "grudando" o valor errado pra sempre
+  // no Acompanhar Ponto e na impressão da folha, mesmo com o registro real já certo. O registro
+  // (r.hora/r.ajustado, já tratado acima) É a fonte de verdade: toda aprovação de ajuste grava
+  // direto nele em aplicarAjusteNoRegistro, então não é preciso — e é perigoso — reaplicar aqui
+  // o valor antigo guardado em state.adjustments por cima.
   // Dias de férias aprovadas também entram no ponto do período, marcados como "Férias" — pedido
   // do administrador: se o colaborador saiu de férias, esses dias precisam aparecer destacados
   // como férias (na folha, na impressão e no histórico), em vez de ficarem em branco. Só marca o
@@ -3048,7 +3053,7 @@ function inserirPontoManual(emp,data,tipo,hora,obs){
   }else{
     r={id:newId(),emp:emp.nome,data,tipo,hora,
       lat:null,lon:null,addr:'Ponto lançado manualmente pelo administrador'+(obs?' — '+obs:''),
-      cidade:'Manual',estado:'RH',prec:0,ip:'—',janta,manual:true,
+      cidade:'Manual',estado:'RH',prec:0,ip:'—',janta,manual:true,ajustado:true,
       disp:'Lançamento manual (Admin)',at:nowIso};
     state.registros.unshift(r);
   }

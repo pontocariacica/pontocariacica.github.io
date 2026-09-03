@@ -1278,7 +1278,7 @@ function renderNav(){
       <span class="ic">${i.ic}</span><span>${i.t}</span>${badge}</button>`;
   }).join('');
 }
-function go(id){if(id==='acompanhar')state.acompMonth=ymNow();if(id==='suporte'&&state.role==='colab')markSuporteRead();state.page=id;renderNav();render();saveSession();document.getElementById('sidebar').classList.remove('open');window.scrollTo(0,0);}
+function go(id){if(id==='acompanhar')state.acompMonth=ymNow();if(id==='payroll')state.payrollPeriod=null;if(id==='suporte'&&state.role==='colab')markSuporteRead();state.page=id;renderNav();render();saveSession();document.getElementById('sidebar').classList.remove('open');window.scrollTo(0,0);}
 
 /* ===== Barra de navegação inferior (celular) ===== */
 const BOTTOM={
@@ -3424,70 +3424,140 @@ function recusarAjuste(id){
 }
 
 const folhaBadge={fechado:['b-good','fechado'],aberto:['b-warn','aberto'],pendencia:['b-crit','pendência']};
+// Reorganização pedida pelo administrador (área "muito bagunçada" antes): em vez de uma tela só
+// com o período que acabou de terminar, agora é uma "pasta" por período (16 a 15) — clique pra
+// abrir e ver o fechamento de cada colaborador daquele período específico. Toda pasta com pelo
+// menos um fechamento registrado aparece, mais o período que acabou de terminar (sempre visível,
+// mesmo antes de qualquer um fechar, pra já dar pra trabalhar nele assim que o dia 16 vira).
+function fechamentoPeriodos(){
+  const set=new Set();
+  set.add(periodKey(previousPeriod()));
+  (state.fechamentos||[]).forEach(f=>{if(f.periodKey)set.add(f.periodKey);});
+  Object.values(state.closedPeriods||{}).forEach(arr=>(arr||[]).forEach(pk=>set.add(pk)));
+  return Array.from(set).sort().reverse();
+}
+function abrirPastaFolha(pk){state.payrollPeriod=pk;render();window.scrollTo(0,0);}
+function voltarPastasFolha(){state.payrollPeriod=null;render();window.scrollTo(0,0);}
 function adminPayroll(){
   // Ao abrir a tela, marca os fechamentos como vistos (limpa o selo verde do menu)
   let _ch=false;(state.fechamentos||[]).forEach(f=>{if(!f.seen){f.seen=true;_ch=true;}});
   if(_ch){renderNav();scheduleSave();}
-  // Esta tela é sempre sobre o período que ACABOU DE TERMINAR — o mesmo que os botões "Fechar
-  // Folha"/"Fechar período anterior" fecham (previousPeriod). Antes ela mostrava o período ATUAL
-  // (ainda em andamento), então quase nunca batia com quem realmente tinha fechado: a lista de
-  // "pontos fechados" ficava vazia ou incompleta, e a impressão em lote (que usa os mesmos dados)
-  // parecia "só imprimir 1 colaborador" — na prática estava olhando pro período errado.
-  const prevBounds=previousPeriod();
-  const pk=periodKey(prevBounds);
-  const fechs=fechadosNoPeriodo(pk);
-  const fechouSet=new Set(fechs.map(x=>x.emp));
+  return state.payrollPeriod?adminPayrollPasta(state.payrollPeriod):adminPayrollPastas();
+}
+function adminPayrollPastas(){
+  const periodos=fechamentoPeriodos();
   const ativos=state.employees.filter(e=>e.status!=='inativo');
-  const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=prevBounds.start&&dt<=prevBounds.end;};
-  // Total e horas extras vêm sempre do mesmo motor de cálculo usado no Espelho/Dashboard/relatórios
-  // (collectPonto) — nunca de um valor guardado à parte, pra nunca divergir do que já é mostrado
-  // em outras telas. "Faltas" não é calculado aqui de propósito: exigiria saber a escala/dias de
-  // trabalho esperados de cada colaborador, e um número errado nessa coluna é pior do que não
-  // mostrar nada — por isso aparece "—" (não calculado) em vez de arriscar um valor incorreto.
-  const rows=ativos.map(e=>{
-    const d=collectPonto(e.nome,inPeriod);
-    const totalMin=d.rows.reduce((s,r)=>s+(r.entrada!=='—'&&r.saida!=='—'?Math.max(0,hmToMin(r.saida)-hmToMin(r.entrada)-almocoOverlapMin(hmToMin(r.entrada),hmToMin(r.saida))):0),0);
-    const status=fechouSet.has(e.nome)?'fechado':(d.dias?'aberto':'pendencia');
-    const bd=folhaBadge[status];
-    return `<tr>
-      <td><b>${e.nome}</b></td><td>${fmtMin(totalMin)}</td><td>${d.extraTotal}</td><td>—</td>
-      <td><span class="badge ${bd[0]}">${bd[1]}</span></td>
-      <td style="white-space:nowrap">
-        <button class="btn sm ghost" onclick="verPonto('${e.nome.replace(/'/g,"")}')">👁️ Ver ponto</button>
-        <button class="btn sm primary" onclick="imprimirPonto('${e.nome.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir</button>
-      </td></tr>`;
-  }).join('')||`<tr><td colspan="6" style="color:var(--muted)">Nenhum funcionário cadastrado.</td></tr>`;
-  const fechRows=fechs.length?fechs.map(x=>`<tr>
-    <td><b>${x.emp}</b></td><td>${x.tipo||'Ponto'}</td><td>${x.periodo}</td>
-    <td><small style="color:var(--muted)">${x.at||'—'}</small></td>
-    <td style="white-space:nowrap">
-      <button class="btn sm ghost" onclick="verPonto('${x.emp.replace(/'/g,"")}')">👁️ Ver ponto</button>
-      <button class="btn sm primary" onclick="imprimirPonto('${x.emp.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir espelho</button>
-    </td></tr>`).join(''):`<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhum colaborador fechou o ponto ainda. Quando alguém fechar, aparece aqui automaticamente.</td></tr>`;
-  return `${head('Fechamento de Folha','Período '+periodLabel(prevBounds)+' (período encerrado).',
+  const cards=periodos.map(pk=>{
+    const b=periodBoundsFromKey(pk);
+    const fechs=fechadosNoPeriodo(pk);
+    const completo=ativos.length>0&&fechs.length>=ativos.length;
+    return `<button class="emp-pick" onclick="abrirPastaFolha('${pk}')">
+      <div style="width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:18px;background:${completo?'var(--s-good)':'var(--c5)'}22;color:${completo?'var(--s-good)':'var(--c5)'}">📁</div>
+      <div style="text-align:left;min-width:0;flex:1"><b>${periodLabel(b)}</b><small style="color:var(--muted);display:block">${fechs.length}/${ativos.length} colaborador(es) fechados</small></div>
+      <span class="emp-pick-arrow">›</span>
+    </button>`;
+  }).join('');
+  return `${head('Fechamento de Folha','Cada pasta é um período (dia 16 a 15). Abra uma pasta pra ver o fechamento de cada colaborador e editar o espelho.',
     `<button class="btn ghost" onclick="abrirImprimirPorPeriodo()">🖨️ Imprimir por Período</button>
      <button class="btn ghost" onclick="imprimirFolhaTodos()">🖨️ Imprimir todos (fechados)</button>
      <button class="btn primary" onclick="fecharFolha()">🔒 Fechar Folha</button>`)}
   <div class="grid g-4">
-    ${kpi('✅','var(--c2)','Pontos fechados',fechs.length,'colaboradores fecharam')}
+    ${kpi('📁','var(--c1)','Pastas',periodos.length,'períodos com pasta')}
+    ${kpi('👥','var(--c2)','Funcionários',ativos.length,'ativos no total')}
+    ${kpi('✏️','var(--c5)','Ajustes',state.adjustments.filter(a=>a.status==='pendente').length,'pendentes')}
+    ${kpi('🕒','var(--c3)','Período mais recente',periodos.length?periodLabel(periodBoundsFromKey(periodos[0])):'—')}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-top:0">📁 Pastas por período</h3>
+    <div class="sub">Clique em um período pra ver o fechamento de cada colaborador — e editar o espelho de qualquer um, mesmo já fechado.</div>
+    <div class="emp-grid">${cards||'<div style="color:var(--muted)">Nenhum período disponível ainda.</div>'}</div>
+  </div>`;
+}
+function adminPayrollPasta(pk){
+  const b=periodBoundsFromKey(pk);
+  const fechs=fechadosNoPeriodo(pk);
+  const fechMap={};fechs.forEach(f=>{fechMap[f.emp]=f;});
+  const ativos=state.employees.filter(e=>e.status!=='inativo');
+  const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
+  // Total e horas extras vêm sempre do mesmo motor de cálculo usado no Espelho/Dashboard/relatórios
+  // (collectPonto) — nunca de um valor guardado à parte, pra nunca divergir do que já é mostrado
+  // em outras telas.
+  const rows=ativos.map(e=>{
+    const d=collectPonto(e.nome,inPeriod);
+    const totalMin=d.rows.reduce((s,r)=>s+(r.entrada!=='—'&&r.saida!=='—'?Math.max(0,hmToMin(r.saida)-hmToMin(r.entrada)-almocoOverlapMin(hmToMin(r.entrada),hmToMin(r.saida))):0),0);
+    const fech=fechMap[e.nome];
+    const status=fech?'fechado':(d.dias?'aberto':'pendencia');
+    const bd=folhaBadge[status];
+    // Pedido do administrador: só estas duas ações na frente de cada colaborador, pra achar rápido
+    // quem precisa e editar na hora — mesmo com o período já fechado (fechar só trava o colaborador
+    // de bater ponto novo, nunca o Admin de corrigir um horário).
+    return `<tr>
+      <td><div class="uname"><img class="tavatar" src="${empAvatar(e.nome)}"><div><b>${e.nome}</b>${fech?`<small style="color:var(--muted)">Fechado em ${fech.at}</small>`:''}</div></div></td>
+      <td>${fmtMin(totalMin)}</td><td>${d.extraTotal}</td>
+      <td><span class="badge ${bd[0]}">${bd[1]}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn sm primary" onclick="imprimirPonto('${e.nome.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir Espelho</button>
+        <button class="btn sm ghost" onclick="editarEspelho('${e.nome.replace(/'/g,"")}','${pk}')">✏️ Editar Espelho</button>
+      </td></tr>`;
+  }).join('')||`<tr><td colspan="5" style="color:var(--muted)">Nenhum funcionário cadastrado.</td></tr>`;
+  return `${head('📁 '+periodLabel(b),`Fechamento de Folha • ${fechs.length} de ${ativos.length} colaborador(es) fecharam este período.`,
+    `<button class="btn ghost" onclick="voltarPastasFolha()">‹ Voltar às pastas</button>
+     <button class="btn sm green" onclick="imprimirFolhaDoPeriodo('${pk}')">🖨️ Imprimir ${fechs.length} ponto(s) fechado(s)</button>`)}
+  <div class="grid g-4">
+    ${kpi('✅','var(--c2)','Fechados',fechs.length,'colaboradores')}
     ${kpi('🕒','var(--c3)','Ainda não fecharam',Math.max(0,ativos.length-fechs.length),'aguardando')}
     ${kpi('👥','var(--c1)','Funcionários',ativos.length,'no total')}
-    ${kpi('✏️','var(--c5)','Ajustes',state.adjustments.filter(a=>a.status==='pendente').length,'Pendentes')}
+    ${kpi('✏️','var(--c5)','Ajustes',state.adjustments.filter(a=>a.status==='pendente').length,'pendentes')}
   </div>
   <div class="card" style="margin-top:16px">
-    <h3>✅ Pontos fechados pelos colaboradores &nbsp;<span class="badge b-good">${fechs.length}</span></h3>
-    <div class="sub">Quem já fechou o ponto e enviou para o RH — aparece aqui automaticamente, inclusive quando fecham pelo celular.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Tipo</th><th>Período</th><th>Fechado em</th><th>Ação</th></tr></thead>
-    <tbody>${fechRows}</tbody></table></div>
+    <h3 style="margin-top:0">Colaboradores neste período</h3>
+    <div class="sub">Imprima o espelho ou edite direto — funciona mesmo com o período já fechado.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Total período</th><th>Horas extras</th><th>Situação</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+// Edição rápida do espelho de um colaborador dentro de um período específico — pedido do
+// administrador pra conseguir corrigir um horário na hora, mesmo com o período já fechado (o
+// fechamento só trava o COLABORADOR de bater ponto novo sem querer; nunca bloqueou o Admin).
+// Reaproveita o mesmo caminho de lançamento manual (inserirPontoManual) já usado em "Abrir Ponto
+// Manual", que já resolve duplicidade de registro sozinho.
+function editarEspelho(empName,pk){
+  const b=periodBoundsFromKey(pk);
+  const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
+  const d=collectPonto(empName,inPeriod);
+  const rows=d.rows.length?d.rows.map(r=>r.ferias
+    ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="2" style="text-align:center;color:var(--muted)">🏖️ Férias — não editável aqui</td><td></td></tr>`
+    : `<tr>
+        <td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
+        <td><input class="input" type="time" id="eeEnt_${r.data}" value="${r.entrada!=='—'?r.entrada:''}"></td>
+        <td><input class="input" type="time" id="eeSai_${r.data}" value="${r.saida!=='—'?r.saida:''}"></td>
+        <td><button class="btn sm primary" onclick="salvarEdicaoEspelhoDia('${empName.replace(/'/g,"")}','${r.data}','${pk}')">💾 Salvar</button></td>
+      </tr>`
+  ).join(''):`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Nenhum dia com ponto neste período.</td></tr>`;
+  openModal({wide:true,content:`<div class="modal-head"><h3>✏️ Editar espelho — ${empName}</h3></div>
+  <div class="modal-body">
+    <div class="sub" style="margin-bottom:10px">${periodLabel(b)} • Corrija o horário de qualquer dia e salve — funciona mesmo com o período já fechado.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
   </div>
-  <div class="card" style="margin-top:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div><h3 style="margin:0">Situação por colaborador</h3><div class="sub" style="margin:0">A impressão em lote gera apenas os pontos fechados do período.</div></div>
-      <button class="btn sm green" onclick="imprimirFolhaTodos()">🖨️ Imprimir ${fechs.length} ponto(s) fechado(s)</button>
-    </div>
-    <div class="divider"></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Total período</th><th>Horas extras</th><th>Faltas</th><th>Situação</th><th>Ação</th></tr></thead>
-    <tbody>${rows}</tbody></table></div></div>`;
+  <div class="modal-foot">
+    <button class="btn ghost" onclick="closeModal()">Fechar</button>
+    <button class="btn primary" onclick="imprimirPonto('${empName.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir espelho</button>
+  </div>`});
+}
+function salvarEdicaoEspelhoDia(empName,data,pk){
+  const emp=state.employees.find(e=>e.nome===empName);
+  if(!emp){toast('Colaborador não encontrado','','err');return;}
+  const entEl=document.getElementById('eeEnt_'+data),saiEl=document.getElementById('eeSai_'+data);
+  const ent=entEl?entEl.value:'',sai=saiEl?saiEl.value:'';
+  if(!ent&&!sai){toast('Nada para salvar','Informe ao menos um horário.','err');return;}
+  if(ent)inserirPontoManual(emp,data,'Entrada',ent,'Editado no Fechamento de Folha');
+  if(sai)inserirPontoManual(emp,data,'Saída',sai,'Editado no Fechamento de Folha');
+  pushNotif({for:'colab',ic:'✏️',c:'var(--c2)',t:'Ponto ajustado pelo administrador',s:`${empName} • ${fmtd(data)}`});
+  state.logs.unshift({quem:'Admin',acao:'Editou espelho de ponto',alvo:`${empName} • ${fmtd(data)}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  saveNow();
+  editarEspelho(empName,pk); // reabre o modal já atualizado com o novo valor
+  toast('Espelho atualizado',`${empName} • ${fmtd(data)}`,'ok');
 }
 // ===== Impressão de espelhos =====
 // Monta os dias reais do período a partir dos registros, com contagem de jantas.
@@ -3613,18 +3683,20 @@ function fechadosNoPeriodo(pk){
 function fechadosPeriodoAtual(){
   return fechadosNoPeriodo(periodKey(previousPeriod()));
 }
-function imprimirFolhaTodos(){
-  const fechados=fechadosPeriodoAtual();
-  if(!fechados.length){toast('Nada a imprimir','Não há pontos fechados no período.','info');return;}
+// Impressão em lote de um período qualquer (usada tanto pelo atalho de sempre, que é sobre o
+// período que acabou de terminar, quanto por dentro de uma pasta específica em Fechamento de
+// Folha — pra imprimir os fechados daquela pasta, e não sempre do período mais recente).
+function imprimirFolhaDoPeriodo(pk){
+  const fechados=fechadosNoPeriodo(pk);
+  if(!fechados.length){toast('Nada a imprimir','Não há pontos fechados neste período.','info');return;}
   const xs=fechados.map(f=>({emp:f.emp,status:'fechado'}));
-  // Impressão em lote é sempre sobre o período FECHADO (o que acabou de terminar) — os pontos
-  // batidos no período atual, ainda em andamento, não têm nada a ver com esse fechamento. Por
-  // isso passa previousPeriod() explícito, em vez de depender do padrão de espelhoSection (que
-  // agora é o período atual, para as impressões avulsas em outras telas).
-  const pb=previousPeriod();
+  const pb=periodBoundsFromKey(pk);
   const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,pb)}</div>`).join('');
   printHTML(folhaDocHTML(inner));
   toast('Impressão em lote',`${xs.length} ponto(s) fechado(s) do período.`,'info');
+}
+function imprimirFolhaTodos(){
+  imprimirFolhaDoPeriodo(periodKey(previousPeriod()));
 }
 // ===== Imprimir por Período — escolha livre de mês e de quem imprimir (dentro de
 // Fechamento de Folha, pedido do administrador). Diferente de "Imprimir todos (fechados)"

@@ -375,6 +375,44 @@ html[data-theme="dark"] .sup-status{color:var(--green)}
 @keyframes slidein{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
 @keyframes draw{to{stroke-dashoffset:0}}
 
+/* ===== Entrada dos cards ao navegar (não repete em atualizações em tempo real) ===== */
+@keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.content.page-enter .card{animation:cardIn .42s cubic-bezier(.2,.8,.2,1) both}
+.content.page-enter .grid>.card:nth-child(1){animation-delay:.02s}
+.content.page-enter .grid>.card:nth-child(2){animation-delay:.07s}
+.content.page-enter .grid>.card:nth-child(3){animation-delay:.12s}
+.content.page-enter .grid>.card:nth-child(4){animation-delay:.17s}
+.content.page-enter .grid>.card:nth-child(5){animation-delay:.22s}
+.content.page-enter .grid>.card:nth-child(6){animation-delay:.27s}
+
+/* ===== Pulso no sininho quando chega notificação nova ===== */
+@keyframes notifPop{0%{transform:scale(1)}35%{transform:scale(1.55)}65%{transform:scale(.9)}100%{transform:scale(1)}}
+.notif .dot.pulse{animation:notifPop .55s cubic-bezier(.3,1.4,.4,1)}
+@keyframes bellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(-14deg)}30%{transform:rotate(11deg)}45%{transform:rotate(-8deg)}60%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}}
+.icon-btn.notif.ring{animation:bellRing .5s ease}
+
+/* ===== Destaque quando um status muda (ajuste aprovado/recusado, etc.) ===== */
+@keyframes rowFlash{0%{background:rgba(37,99,235,.16)}100%{background:transparent}}
+.row-flash{animation:rowFlash 1.1s ease}
+@keyframes badgePop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.badge-flash{animation:badgePop .45s ease}
+
+/* ===== Celebração de jornada concluída (distinta do check de cada batida) ===== */
+.success-card.celebrate{position:relative}
+.success-card.celebrate::before{content:"";position:absolute;inset:-14px;border-radius:30px;
+  border:2px solid var(--green);opacity:0;animation:celebrateRing .9s ease-out .15s}
+@keyframes celebrateRing{0%{opacity:.7;transform:scale(.85)}100%{opacity:0;transform:scale(1.18)}}
+.success-card.celebrate h3{animation:pop .4s .15s both}
+
+/* ===== Acessibilidade: respeita a preferência do sistema por menos movimento ===== */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;scroll-behavior:auto !important;
+  }
+  .jbar-fill::after{display:none}
+}
+
 /* responsive */
 .menu-toggle{display:none}
 @media(max-width:1024px){.g-4{grid-template-columns:repeat(2,1fr)}.g-3{grid-template-columns:1fr}.punch-hero{grid-template-columns:1fr}}
@@ -1464,11 +1502,23 @@ function toast(title,msg,type='ok'){
 function openModal(html){document.getElementById('overlay').innerHTML=`<div class="modal ${html.wide?'wide':''}">${html.content}</div>`;document.getElementById('overlay').classList.add('show');}
 function closeModal(){document.getElementById('overlay').classList.remove('show');document.getElementById('overlay').innerHTML='';}
 function myNotifs(){return state.notifications.filter(n=>n.for===state.role);}
+let _lastUnreadCount=0;
 function updateNotifBadge(){
   const dot=document.getElementById('notifDot');if(!dot)return;
   const unread=myNotifs().filter(n=>!n.read).length;
   dot.style.display=unread?'grid':'none';
   dot.textContent=unread||'';
+  // Pulsa o sininho só quando o número de não-lidas SOBE (nova notificação chegou) — não a cada
+  // render, senão ele ficaria "vivo" o tempo todo mesmo sem nada novo.
+  if(unread>_lastUnreadCount){
+    dot.classList.remove('pulse');
+    const bell=document.querySelector('.icon-btn.notif');
+    if(bell)bell.classList.remove('ring');
+    void dot.offsetWidth;
+    dot.classList.add('pulse');
+    if(bell){void bell.offsetWidth;bell.classList.add('ring');}
+  }
+  _lastUnreadCount=unread;
 }
 function pushNotif(n){
   // unshift (não push): o array de notificações fica ordenado da mais nova pra mais antiga
@@ -1842,7 +1892,10 @@ async function registrarPonto(btn,force){
       pushNotif({for:'admin',ic:'🍽️',c:'var(--c3)',t:'Janta registrada',s:`${state.user.nome} • saída ${time} (após 18:59)`});
       state.logs.unshift({quem:state.user.nome,acao:'Janta registrada (fechamento após 18:59)',alvo:`Saída ${time} • ${fmtd(todayKey())}`,ip:'201.9.88.3',hora:now.toISOString().slice(0,16).replace('T',' ')});
     }
-    showSuccess(SCHED_LABEL[next]+' registrada!',(janta?'🍽️ Janta registrada • ':'')+`${time} • ${geo.cidade}/${geo.estado}`);
+    // A última batida programada do dia (Saída) encerra a jornada — merece uma celebração um
+    // pouco diferente da de cada batida normal, sem inventar nenhum dado novo.
+    const jornadaConcluida = next==='saida';
+    showSuccess(SCHED_LABEL[next]+' registrada!',(janta?'🍽️ Janta registrada • ':'')+`${time} • ${geo.cidade}/${geo.estado}`,jornadaConcluida);
     // Grava imediatamente (não espera o debounce) para reduzir ao mínimo a chance de o
     // registro ser perdido caso outro aparelho sincronize dados quase ao mesmo tempo.
     saveNow();render();
@@ -1851,12 +1904,14 @@ async function registrarPonto(btn,force){
     if(btn){btn.disabled=false;render();}
   }
 }
-function showSuccess(title,msg){
+function showSuccess(title,msg,celebrate){
   document.getElementById('successTitle').textContent=title;
   document.getElementById('successMsg').textContent=msg;
   const s=document.getElementById('success');s.classList.add('show');
+  const card=s.querySelector('.success-card');
+  card.classList.toggle('celebrate',!!celebrate);
   s.querySelectorAll('.check circle,.check path').forEach(e=>{e.style.animation='none';e.offsetHeight;e.style.animation='';});
-  setTimeout(()=>s.classList.remove('show'),1900);
+  setTimeout(()=>s.classList.remove('show'),celebrate?2500:1900);
 }
 
 /* ============================ GRÁFICOS (SVG) ============================ */
@@ -1897,6 +1952,26 @@ function lineChart(data,{w=520,h=160,color='var(--c1)'}={}){
 
 /* ============================ RENDER PRINCIPAL ============================ */
 let renderRetryTimer=null;
+let _lastRenderedPage=null;
+// Anima os números inteiros dos cards de KPI subindo de 0 até o valor real, só na entrada da
+// tela (nunca a cada atualização em tempo real, senão os números ficam "piscando"/recontando
+// toda vez que chega um dado novo de outro usuário).
+function animateKpiCounts(container){
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  container.querySelectorAll('.kpi .val').forEach(el=>{
+    const txt=el.textContent.trim();
+    if(!/^\d+$/.test(txt))return; // só números inteiros "puros" — evita mexer em horas (ex.: 01:20) ou textos
+    const target=parseInt(txt,10);
+    if(!target){return;}
+    const dur=500,start=performance.now();
+    const step=now=>{
+      const p=Math.min(1,(now-start)/dur);
+      el.textContent=Math.round(target*(1-Math.pow(1-p,3))); // ease-out cúbico
+      if(p<1)requestAnimationFrame(step);else el.textContent=String(target);
+    };
+    requestAnimationFrame(step);
+  });
+}
 function render(){
   const c=document.getElementById('content');
   // Se a pessoa está com um <select> em foco com o menu nativo ABERTO, recriar o HTML agora
@@ -1946,7 +2021,17 @@ function render(){
     const el=document.getElementById(id);
     if(el)scrollPreserve[id]=el.scrollTop;
   });
+  const pageChanged=state.page!==_lastRenderedPage;
+  _lastRenderedPage=state.page;
   c.innerHTML=(P[state.page]||(()=>'<div class="card">Em construção…</div>'))();
+  if(pageChanged){
+    // Reforça a classe (removendo e recolocando) pra garantir que a animação CSS sempre re-dispare
+    // quando a pessoa volta pra uma tela que já tinha essa classe.
+    c.classList.remove('page-enter');void c.offsetWidth;c.classList.add('page-enter');
+    animateKpiCounts(c);
+  }else{
+    c.classList.remove('page-enter');
+  }
   Object.keys(preserved).forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
@@ -2195,7 +2280,7 @@ function confirmFecharMeuPonto(){
 }
 function colabAdjust(){
   const mine=state.adjustments.filter(a=>a.emp===state.user.nome);
-  const rows=mine.map(a=>`<tr><td>${fmtd(a.data)}</td><td>${a.tipo}</td><td><b>${a.para}</b></td><td>${a.motivo}</td>
+  const rows=mine.map(a=>`<tr data-ajuste-row="${a.id}"><td>${fmtd(a.data)}</td><td>${a.tipo}</td><td><b>${a.para}</b></td><td>${a.motivo}</td>
     <td><span class="badge ${ajusteBadge(a.status)}">${a.status}</span>
       ${a.status==='recusado'&&a.motivoReprovacao?`<br><small style="color:var(--s-crit)">${a.motivoReprovacao}</small>`:''}</td>
     <td style="white-space:nowrap">${a.status==='pendente'
@@ -3282,7 +3367,7 @@ function verMapa(i){
 }
 function ajusteBadge(s){return s==='pendente'?'b-warn':(s==='aprovado'||s==='realizado')?'b-good':s==='recusado'?'b-crit':'b-mut';}
 function adminAdjustments(){
-  const rows=state.adjustments.map(a=>`<tr>
+  const rows=state.adjustments.map(a=>`<tr data-ajuste-row="${a.id}">
     <td><b>${a.emp}</b></td><td>${fmtd(a.data)}</td><td>${a.tipo}</td>
     <td>${a.de&&a.de!=='—'?a.de:'<span style="color:var(--muted)">sem batida</span>'} → <b>${a.para}</b></td>
     <td>${a.motivo}<br><small style="color:var(--muted)">${a.obs||''}</small></td>
@@ -3403,6 +3488,17 @@ function realizarAjuste(id){
   state.logs.unshift({quem:'Admin',acao:'Editou ponto (ajuste realizado)',alvo:`${a.emp} • ${a.tipo} ${fmtd(a.data)} • valor anterior ${deAntes} → novo valor ${hora}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   closeModal();renderNav();saveNow();render();toast('Ajuste realizado',a.emp+' foi notificado.','info');
 }
+// Depois que a lista é redesenhada, dá um destaque rápido na linha/selo da solicitação que
+// acabou de mudar de status — só visual, não mexe em nenhum dado.
+function flashAjusteRow(id){
+  requestAnimationFrame(()=>{
+    document.querySelectorAll(`[data-ajuste-row="${id}"]`).forEach(row=>{
+      row.classList.remove('row-flash');void row.offsetWidth;row.classList.add('row-flash');
+      const b=row.querySelector('.badge');
+      if(b){b.classList.remove('badge-flash');void b.offsetWidth;b.classList.add('badge-flash');}
+    });
+  });
+}
 function aprovarAjuste(id){
   const a=state.adjustments.find(x=>x.id===id);if(!a)return;
   a.status='aprovado';a.realizadoEm=new Date().toLocaleDateString('pt-BR');a._ts=Date.now();
@@ -3410,6 +3506,7 @@ function aprovarAjuste(id){
   pushNotif({for:'colab',ic:'✅',c:'var(--s-good)',t:'Ajuste aprovado',s:`${a.tipo} de ${fmtd(a.data)} • horário ${a.para}`});
   state.logs.unshift({quem:'Admin',acao:'Aprovou ajuste',alvo:`${a.emp} • ${a.tipo} ${fmtd(a.data)} • valor anterior ${a.de&&a.de!=='—'?a.de:'sem batida'} → novo valor ${a.para}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   renderNav();saveNow();render();toast('Ajuste aprovado',a.emp+' foi notificado.','info');
+  flashAjusteRow(id);
 }
 function recusarAjuste(id){
   const a=state.adjustments.find(x=>x.id===id);if(!a)return;
@@ -3421,6 +3518,7 @@ function recusarAjuste(id){
   pushNotif({for:'colab',ic:'❌',c:'var(--s-crit)',t:'Ajuste recusado',s:`${a.tipo} de ${fmtd(a.data)} • Motivo: ${a.motivoReprovacao}`});
   state.logs.unshift({quem:'Admin',acao:'Recusou ajuste',alvo:`${a.emp} • ${a.tipo} ${fmtd(a.data)} • Motivo: ${a.motivoReprovacao}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   closeModal();renderNav();saveNow();render();toast('Ajuste recusado',a.emp+' foi notificado.','info');
+  flashAjusteRow(id);
 }
 
 const folhaBadge={fechado:['b-good','fechado'],aberto:['b-warn','aberto'],pendencia:['b-crit','pendência']};

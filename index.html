@@ -3521,11 +3521,23 @@ function adminPayrollPasta(pk){
 // fechamento só trava o COLABORADOR de bater ponto novo sem querer; nunca bloqueou o Admin).
 // Reaproveita o mesmo caminho de lançamento manual (inserirPontoManual) já usado em "Abrir Ponto
 // Manual", que já resolve duplicidade de registro sozinho.
-function editarEspelho(empName,pk){
+// dateKey: mesma lógica de todayKey(), mas para qualquer Date — sempre pelos componentes locais
+// (nunca toISOString, que desloca um dia pra trás em fusos negativos como o do Brasil).
+function dateKey(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+function editarEspelho(empName,pk,diaExtra){
   const b=periodBoundsFromKey(pk);
   const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(empName,inPeriod);
-  const rows=d.rows.length?d.rows.map(r=>r.ferias
+  let linhas=d.rows.slice();
+  // Só os dias com ALGUM registro/ajuste/férias aparecem em collectPonto — um dia que o
+  // colaborador esqueceu de bater (o caso mais comum de precisar editar) simplesmente não tinha
+  // como aparecer aqui antes. O seletor de data abaixo resolve isso: escolhe o dia que quiser
+  // dentro do período e ele entra na lista pra editar, mesmo sem nenhum ponto batido ainda.
+  if(diaExtra&&!linhas.some(r=>r.data===diaExtra)){
+    linhas.push({data:diaExtra,entrada:'—',saida:'—',ajustado:false,ferias:false});
+    linhas.sort((x,y)=>x.data.localeCompare(y.data));
+  }
+  const rows=linhas.length?linhas.map(r=>r.ferias
     ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="2" style="text-align:center;color:var(--muted)">🏖️ Férias — não editável aqui</td><td></td></tr>`
     : `<tr>
         <td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
@@ -3534,9 +3546,16 @@ function editarEspelho(empName,pk){
         <td><button class="btn sm primary" onclick="salvarEdicaoEspelhoDia('${empName.replace(/'/g,"")}','${r.data}','${pk}')">💾 Salvar</button></td>
       </tr>`
   ).join(''):`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Nenhum dia com ponto neste período.</td></tr>`;
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const limiteMax=b.end<hoje?b.end:hoje;
   openModal({wide:true,content:`<div class="modal-head"><h3>✏️ Editar espelho — ${empName}</h3></div>
   <div class="modal-body">
     <div class="sub" style="margin-bottom:10px">${periodLabel(b)} • Corrija o horário de qualquer dia e salve — funciona mesmo com o período já fechado.</div>
+    <div class="field" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px">
+      <div style="flex:1"><label>Escolher outro dia (inclusive um sem nenhum ponto batido)</label>
+        <input class="input" type="date" id="eeNovaData" min="${dateKey(b.start)}" max="${dateKey(limiteMax)}" value="${diaExtra||''}"></div>
+      <button class="btn sm primary" onclick="abrirDiaNoEspelho('${empName.replace(/'/g,"")}','${pk}')">➕ Abrir dia</button>
+    </div>
     <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>
   </div>
@@ -3544,6 +3563,12 @@ function editarEspelho(empName,pk){
     <button class="btn ghost" onclick="closeModal()">Fechar</button>
     <button class="btn primary" onclick="imprimirPonto('${empName.replace(/'/g,"")}',periodBoundsFromKey('${pk}'))">🖨️ Imprimir espelho</button>
   </div>`});
+}
+function abrirDiaNoEspelho(empName,pk){
+  const el=document.getElementById('eeNovaData');
+  const val=el&&el.value;
+  if(!val){toast('Escolha uma data','Selecione o dia que deseja abrir ou editar.','err');return;}
+  editarEspelho(empName,pk,val);
 }
 function salvarEdicaoEspelhoDia(empName,data,pk){
   const emp=state.employees.find(e=>e.nome===empName);

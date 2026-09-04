@@ -1713,6 +1713,13 @@ function removerAutoIndevido(emp,key,tipo){
   const idx=state.registros.findIndex(r=>r.id===id);
   if(idx<0)return false;
   const r=state.registros[idx];
+  // Proteção extra: mesmo tendo o id determinístico do preenchimento automático, esse registro
+  // pode ter sido corrigido depois por um ajuste aprovado ou lançamento manual — aplicarAjusteNoRegistro
+  // e inserirPontoManual reaproveitam o registro existente (e o id dele) em vez de trocar de id, então
+  // "id auto:" sozinho não garante mais que ninguém mexeu nele. Sem essa checagem, uma correção humana
+  // aprovada era apagada silenciosamente na próxima varredura (bug real encontrado em produção:
+  // ponto do Vinicius e de outros colaboradores voltando ao horário padrão após o ajuste aprovado).
+  if(r.ajustado||r.manual)return false;
   state.registros.splice(idx,1);
   deleteRegistroFromSupabase(r.id);
   if(!state.deletedKeys)state.deletedKeys=[];
@@ -1760,13 +1767,19 @@ function autoPreencherPontosEsquecidos(){
         state.registros.push(novo);meusRegistros.push(novo);
         sendRegistroToSupabase(novo);
         mudou=true;
-      }else if(entradaAtual.id===idEntrada&&entradaAtual.hora!==ini){
+      }else if(entradaAtual.id===idEntrada&&!entradaAtual.ajustado&&!entradaAtual.manual&&entradaAtual.hora!==ini){
         // Ponto que o PRÓPRIO sistema preencheu antes (mesmo id determinístico) — se a jornada de
         // sábado do colaborador foi corrigida no cadastro depois disso (ex.: o Admin ajustou de
         // 12h pra 11h), o valor antigo preenchido automaticamente ficava errado pra sempre, porque
         // a checagem só olhava "já existe algum registro?" e nunca revisitava. Como o id só existe
-        // pra registros gerados por aqui (nunca um ponto batido de verdade ou editado por humano,
-        // que têm outro id), é seguro atualizar o horário pra acompanhar o cadastro atual.
+        // pra registros gerados por aqui, é seguro atualizar o horário pra acompanhar o cadastro atual —
+        // MAS só enquanto ninguém mexeu nele depois. aplicarAjusteNoRegistro() e inserirPontoManual()
+        // reaproveitam o mesmo registro (e o mesmo id "auto:") quando corrigem um ponto que tinha sido
+        // preenchido automaticamente, em vez de trocar de id — então "id auto:" sozinho não bastava
+        // pra saber se é seguro sobrescrever. Sem o "!ajustado&&!manual" aqui, uma correção aprovada
+        // pelo Admin (ou um lançamento manual) era apagada e voltava pro horário padrão da jornada na
+        // próxima sincronização, mesmo continuando marcada como "ajustado" na tela — bug real
+        // encontrado em produção (ponto do Vinicius e de outros colaboradores).
         entradaAtual.hora=ini;entradaAtual.at=agora;
         sendRegistroToSupabase(entradaAtual);
         mudou=true;
@@ -1776,7 +1789,8 @@ function autoPreencherPontosEsquecidos(){
         state.registros.push(novo);meusRegistros.push(novo);
         sendRegistroToSupabase(novo);
         mudou=true;
-      }else if(saidaAtual.id===idSaida&&saidaAtual.hora!==fim){
+      }else if(saidaAtual.id===idSaida&&!saidaAtual.ajustado&&!saidaAtual.manual&&saidaAtual.hora!==fim){
+        // Mesma proteção do bloco de Entrada acima — ver comentário lá.
         saidaAtual.hora=fim;saidaAtual.at=agora;
         sendRegistroToSupabase(saidaAtual);
         mudou=true;

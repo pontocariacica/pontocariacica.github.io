@@ -269,6 +269,34 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
 .jbar-extra{margin-top:9px;font-size:12px;font-weight:700;color:#a06a00;display:flex;align-items:center;gap:5px}
 html[data-theme="dark"] .jbar-extra{color:#e0a835}
 
+/* ===== Andamento do dia de todos os colaboradores (Painel do Admin) ===== */
+.gprow{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--border)}
+.gprow:last-child{border-bottom:none}
+.gprow-who{display:flex;align-items:center;gap:10px;width:210px;flex-shrink:0;min-width:0}
+.gprow-txt{min-width:0}
+.gprow-txt b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gprow-txt small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.gprow-bar{flex:1;min-width:0}
+.gprow-meta{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12px;gap:8px}
+.gprow-meta .mono{font-variant-numeric:tabular-nums;color:var(--text-2);font-weight:700;white-space:nowrap}
+.gprow-meta .mono small{font-weight:500;color:var(--muted)}
+/* Trilho único: preenchimento normal (azul→verde) até a marca, e o que passar da marca
+   (hora extra) continua em amarelo/laranja — a marca é o exato instante em que a hora extra
+   começa a contar pra aquele colaborador. */
+.gbar-track{position:relative;height:14px;border-radius:99px;background:var(--surface-2);
+  box-shadow:inset 0 1px 2px rgba(11,15,25,.10);overflow:hidden}
+.gbar-fill{position:absolute;left:0;top:0;height:100%;
+  background:linear-gradient(90deg,var(--blue),var(--green));transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.gbar-fill-extra{position:absolute;top:0;height:100%;background:var(--s-warn);
+  transition:width .6s cubic-bezier(.2,.8,.2,1),left .6s cubic-bezier(.2,.8,.2,1)}
+.gbar-marker{position:absolute;top:0;bottom:0;width:2px;background:rgba(11,15,25,.4);
+  transition:left .6s cubic-bezier(.2,.8,.2,1)}
+html[data-theme="dark"] .gbar-marker{background:rgba(244,245,247,.55)}
+@media (max-width:680px){
+  .gprow{flex-direction:column;align-items:stretch;gap:8px}
+  .gprow-who{width:auto}
+}
+
 /* progress ring */
 .ring-wrap{display:flex;align-items:center;gap:18px}
 .ring{transform:rotate(-90deg)}
@@ -1212,8 +1240,9 @@ function empStore(id){if(id==null)return {};if(!state.punchesByEmp[id])state.pun
 // em registros e o salvo em punchesByEmp divergiam pra mesma batida) — o colaborador via a
 // entrada/saída "sumir" ou aparecer errada na tela dele, mesmo com o registro real intacto.
 // Ter uma única fonte de verdade elimina essa classe inteira de divergência.
-function myDayObj(){
-  const nome=state.user&&state.user.nome;
+// Generalizada (aceita o nome de qualquer colaborador) — myDayObj() abaixo é só o atalho pro
+// usuário logado, mantido pra não mexer nos outros lugares que já chamam myDayObj() sem argumento.
+function empDayObj(nome){
   if(!nome)return {};
   const today=todayKey();
   const per=collectPonto(nome,d=>d===today);
@@ -1224,6 +1253,9 @@ function myDayObj(){
     if(row.saida&&row.saida!=='—')out.saida={time:row.saida};
   }
   return out;
+}
+function myDayObj(){
+  return empDayObj(state.user&&state.user.nome);
 }
 function myDayEnsure(){const id=state.user&&state.user.id;const st=empStore(id);if(!st[todayKey()])st[todayKey()]={};return st[todayKey()];}
 
@@ -1238,14 +1270,17 @@ function almocoOverlapMin(iniMin,fimMin){
   return Math.max(0,Math.min(60,ov));
 }
 // Jornada cadastrada do funcionário (viria do cadastro). Ex.: 08:00–17:00
-function jornadaInfo(){
-  const u=state.user||{};
+// Generalizada (aceita um funcionário qualquer, não só o usuário logado) — usada tanto pelo
+// card "Jornada em Andamento" do colaborador (via jornadaInfo(), abaixo) quanto pelo painel do
+// admin, que precisa do andamento do dia de TODOS os colaboradores ao mesmo tempo.
+function jornadaInfoFor(u){
+  u=u||{};
   const dow=new Date().getDay();
   const isSat=dow===6;   // sábado usa a jornada reduzida
   const isDescanso=dow===0||!!feriadoDe(todayKey());   // domingo/feriado: tudo é hora extra
   const j=(isSat&&u.jornadaSab)?u.jornadaSab:(u.jornada||'08:00–17:00');
   const [ini,fim]=j.split(/[–-]/).map(s=>s.trim());
-  const t=myDayObj();
+  const t=empDayObj(u.nome);
   // Prevista líquida: desconta da janela cadastrada (ex.: 08:00–17:00) a 1h de almoço que
   // cair dentro dela, para exigir 8h de TRABALHO (não 9h de janela) antes de virar hora extra.
   const previstaMin=isDescanso?0:Math.max(0,(parseHM(fim)-parseHM(ini))/60000-almocoOverlapMin(hmToMin(ini),hmToMin(fim)));
@@ -1260,8 +1295,9 @@ function jornadaInfo(){
   const extraMin=Math.max(0,trabMin-previstaMin);       // hora extra: passou da jornada
   const restanteMin=Math.max(0,previstaMin-trabMin);
   const pct=previstaMin?Math.min(100,Math.round(trabMin/previstaMin*100)):0;
-  return {ini,fim,previstaMin,trabMin,extraMin,restanteMin,pct,emAndamento,temEntrada:!!t.entrada,temSaida:!!t.saida};
+  return {ini,fim,previstaMin,trabMin,extraMin,restanteMin,pct,emAndamento,isDescanso,temEntrada:!!t.entrada,temSaida:!!t.saida};
 }
+function jornadaInfo(){ return jornadaInfoFor(state.user); }
 // Atualiza os números da jornada em tempo real (chamado no tick)
 function updateJornadaLive(){
   if(state.role!=='colab'||state.page!=='dashboard')return;
@@ -1523,6 +1559,7 @@ function tick(){
   const pc=document.getElementById('punchClock');
   if(pc)pc.textContent=t;
   updateJornadaLive();
+  updateAdminProgressLive();
 }
 setInterval(tick,1000);
 
@@ -2215,6 +2252,87 @@ function jornadaCard(){
       A hora extra é gerada automaticamente quando você ultrapassa o fim da jornada (${j.fim}). A janta é registrada quando a saída é após 18:59.</div>
   </div>`;
 }
+
+/* ===== Andamento do dia de todos os colaboradores (Painel do Admin) ===== */
+// Calcula a escala do trilho (gbar-track) e onde cai a "marca" que indica o início da hora
+// extra. O trilho sempre tem folga sobrando à direita da marca (35% da jornada prevista, ou o
+// tanto de hora extra já feito + 30min, o que for maior) pra hora extra ter espaço pra aparecer
+// sem que a barra pareça sempre "estourando" o fim.
+function gaugeMetrics(j){
+  const maxScale=j.previstaMin>0
+    ?Math.max(j.previstaMin*1.35,j.previstaMin+j.extraMin+30)
+    :Math.max(j.trabMin+60,480); // domingo/feriado (previstaMin=0): escala só pelo que já foi trabalhado
+  const markerPct=j.previstaMin>0?Math.min(96,j.previstaMin/maxScale*100):0;
+  const trabPct=Math.min(100,j.trabMin/maxScale*100);
+  const normalPct=Math.min(trabPct,markerPct);
+  const extraPct=Math.max(0,trabPct-markerPct);
+  return {maxScale,markerPct,normalPct,extraPct};
+}
+function gaugeBarHTML(j,idp){
+  const g=gaugeMetrics(j);
+  return `<div class="gbar-track" id="${idp}Track">
+    <div class="gbar-fill" id="${idp}Fill" style="width:${g.normalPct}%"></div>
+    <div class="gbar-fill-extra" id="${idp}FillExtra" style="left:${g.markerPct}%;width:${g.extraPct}%"></div>
+    ${j.previstaMin>0?`<div class="gbar-marker" id="${idp}Marker" style="left:${g.markerPct}%" title="A partir daqui conta hora extra (${j.fim})"></div>`:''}
+  </div>`;
+}
+function empStatusBadgeHTML(j){
+  if(!j.temEntrada)return '<span class="badge b-mut">Não bateu ponto ainda</span>';
+  if(j.emAndamento&&j.extraMin>0)return '<span class="badge b-warn">⚡ Em hora extra</span>';
+  if(j.emAndamento)return '<span class="badge b-info">🕓 Em andamento</span>';
+  if(j.extraMin>0)return '<span class="badge b-warn">⚡ Encerrou com hora extra</span>';
+  return '<span class="badge b-good">✅ Jornada encerrada</span>';
+}
+function gprowWho(emp){
+  const ini=(emp.nome||'?').trim()[0]||'?';
+  return `<div class="gprow-who"><img class="avatar" style="width:34px;height:34px;border-radius:9px" src="${emp.av||AV('#1f3a68',ini)}">
+    <div class="gprow-txt"><b>${emp.nome}</b><small>${[emp.setor,emp.funcao].filter(Boolean).join(' • ')||'—'}</small></div></div>`;
+}
+function gprowShell(emp,badgeHTML,dim){
+  return `<div class="gprow"${dim?' style="opacity:.55"':''}>${gprowWho(emp)}
+    <div class="gprow-bar"><div class="gprow-meta" style="justify-content:flex-end">${badgeHTML}</div></div></div>`;
+}
+// j vem pré-calculado (jornadaInfoFor) pra quem já bate ponto normalmente — fica null pra quem
+// está inativo/de férias/atestado, casos em que não faz sentido nenhum mostrar andamento do dia.
+function collabProgressRow(emp,j){
+  if(emp.status==='inativo')return gprowShell(emp,'<span class="badge b-mut">Inativo</span>',true);
+  if(emp.status==='ferias')return gprowShell(emp,'<span class="badge b-info">🏖️ Em férias</span>');
+  if(emp.status==='atestado')return gprowShell(emp,'<span class="badge b-warn">🩺 Atestado</span>');
+  if(j.isDescanso&&!j.temEntrada)return gprowShell(emp,'<span class="badge b-mut">Folga hoje</span>');
+  const idp='gp'+emp.id;
+  return `<div class="gprow">${gprowWho(emp)}
+    <div class="gprow-bar">${gaugeBarHTML(j,idp)}
+      <div class="gprow-meta">
+        <span class="mono" id="${idp}Time">${fmtMin(j.trabMin)} <small>de ${fmtMin(j.previstaMin)}</small></span>
+        <span id="${idp}Status">${empStatusBadgeHTML(j)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+// Chamada a cada segundo (ver tick()) só quando o admin está com o Dashboard aberto — atualiza
+// os números e a barra de cada colaborador sem precisar re-renderizar a tela inteira.
+function updateAdminProgressLive(){
+  if(state.role!=='admin'||state.page!=='dashboard')return;
+  if(!document.getElementById('gpList'))return;
+  (state.employees||[]).forEach(emp=>{
+    if(emp.status==='inativo'||emp.status==='ferias'||emp.status==='atestado')return;
+    const idp='gp'+emp.id;
+    const fillEl=document.getElementById(idp+'Fill');
+    if(!fillEl)return; // linha "Folga hoje" (sem barra) ou funcionário novo ainda não renderizado
+    const j=jornadaInfoFor(emp);
+    const g=gaugeMetrics(j);
+    fillEl.style.width=g.normalPct+'%';
+    const fillExtraEl=document.getElementById(idp+'FillExtra');
+    if(fillExtraEl){fillExtraEl.style.left=g.markerPct+'%';fillExtraEl.style.width=g.extraPct+'%';}
+    const markerEl=document.getElementById(idp+'Marker');
+    if(markerEl)markerEl.style.left=g.markerPct+'%';
+    const timeEl=document.getElementById(idp+'Time');
+    if(timeEl)timeEl.innerHTML=fmtMin(j.trabMin)+' <small>de '+fmtMin(j.previstaMin)+'</small>';
+    const statusEl=document.getElementById(idp+'Status');
+    if(statusEl)statusEl.innerHTML=empStatusBadgeHTML(j);
+  });
+}
+
 function miniPunch(lbl,t){
   const parts=SCHED.map(s=>SCHED_LABEL[s]+' '+(t[s]?t[s].time:'--:--')).join(' · ');
   const done=SCHED.filter(s=>t[s]).length;
@@ -2965,16 +3083,8 @@ function sendSuporteMsg(){
 /* ==================================================================== */
 function adminDashboard(){
   const e=state.employees;
-  const pend=state.adjustments.filter(a=>a.status==='pendente').length;
   const per=periodLabel(currentPeriod());
   const atestados=state.afastamentos.filter(a=>a.tipo.includes('Atestado')).length;
-  const fech=state.folha.filter(f=>f.status==='fechado').length;
-  const abertos=state.folha.filter(f=>f.status==='aberto').length;
-  const pendec=state.folha.filter(f=>f.status==='pendencia').length;
-  const pctFech=state.folha.length?Math.round(fech/state.folha.length*100):0;
-  const setores={};e.forEach(x=>{setores[x.setor]=(setores[x.setor]||0)+1;});
-  const cores=['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c6)','var(--c5)'];
-  const setorData=Object.keys(setores).map((s,i)=>({l:s,v:setores[s],c:cores[i%cores.length]}));
   // Totais reais do período (somados de TODOS os colaboradores)
   const _b=currentPeriod();
   const _inPer=x=>{const dt=new Date(x+'T00:00:00');return dt>=_b.start&&dt<=_b.end;};
@@ -2982,28 +3092,26 @@ function adminDashboard(){
   e.forEach(emp=>{const d=collectPonto(emp.nome,_inPer);extraMinTotal+=d.extraTotalMin||0;jantasTotal+=d.jantas||0;});
   const pontosHoje=state.registros.filter(r=>r.data===todayKey()).length;
   const emptyBox=msg=>`<div style="color:var(--muted);text-align:center;padding:36px 10px;font-size:13.5px">${msg}</div>`;
+  // Andamento do dia de cada colaborador — quem está em hora extra ou com o dia em andamento
+  // aparece primeiro (é quem o admin mais precisa acompanhar agora); quem ainda não bateu ponto
+  // vem em seguida; encerrados e férias/atestado/inativo ficam por último.
+  const withJ=e.map(emp=>({emp,j:(emp.status==='inativo'||emp.status==='ferias'||emp.status==='atestado')?null:jornadaInfoFor(emp)}));
+  const prio=({emp,j})=>{
+    if(!j)return emp.status==='inativo'?5:4;
+    if(j.emAndamento&&j.extraMin>0)return 0;
+    if(j.emAndamento)return 1;
+    if(!j.temEntrada&&!j.isDescanso)return 2;
+    return 3;
+  };
+  withJ.sort((a,b)=>prio(a)-prio(b));
   return `${head('Dashboard','Visão geral da operação — período '+per+'.',
     `<button class="btn ghost" onclick="go('reports')">📄 Relatórios</button>
      <button class="btn primary" onclick="openEmployeeForm()">＋ Novo Funcionário</button>`)}
-  <div class="grid g-4">
-    ${kpi('👥','var(--c1)','Total de funcionários',e.length,'Cadastrados')}
-    ${kpi('✅','var(--c2)','Ativos',e.filter(x=>x.status==='ativo').length,'Trabalhando')}
-    ${kpi('🏖️','var(--c3)','Em férias',e.filter(x=>x.status==='ferias').length,'Afastados: '+e.filter(x=>x.status==='atestado').length)}
-    ${kpi('✏️','var(--c5)','Solicitações',pend,'Pendentes de ajuste')}
-  </div>
-  <div class="grid g-2" style="margin-top:16px">
-    <div class="card"><h3>Funcionários por setor</h3><div class="sub">Distribuição do quadro</div>
-      ${setorData.length?barChart(setorData,{unit:'',max:0}):emptyBox('Cadastre funcionários para ver a distribuição por setor.')}
-    </div>
-    <div class="card"><h3>Status dos pontos</h3><div class="sub">Fechamento do período</div>
-      ${state.folha.length?`<div class="ring-wrap" style="justify-content:space-around;padding:8px 0">
-        ${donut(pctFech,{label:'Pontos fechados',color:'var(--c2)'})}
-        <div class="mini-list" style="flex:1">
-          ${statRow('Pontos em aberto',abertos,'b-warn')}
-          ${statRow('Pontos fechados',fech,'b-good')}
-          ${statRow('Com pendências',pendec,'b-crit')}
-          ${statRow('Solicitações',pend,'b-info')}
-        </div></div>`:emptyBox('Sem dados de fechamento ainda.')}
+  <div class="card">
+    <h3>Andamento do dia</h3>
+    <div class="sub">Todos os colaboradores, de uma vez só — a marca clara na barra indica onde a hora extra começa a contar.</div>
+    <div id="gpList">
+      ${e.length?withJ.map(({emp,j})=>collabProgressRow(emp,j)).join(''):emptyBox('Cadastre funcionários para acompanhar o andamento do dia.')}
     </div>
   </div>
   <div class="grid g-4" style="margin-top:16px">

@@ -2282,14 +2282,39 @@ function colabHistory(){
   const per=periodLabel(b);
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(state.user.nome,inPeriod);
-  const rows=d.rows.length
-    ? d.rows.map(r=>r.ferias
-        ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td></tr>`
-        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
+  // Mesmo tratamento do espelho impresso (ver espelhoSection): monta uma linha pra CADA dia do
+  // período, não só os dias com ponto batido — inclui domingos/feriados sem registro, destacados
+  // em preto/branco, e deixa "Férias" só na coluna Janta (sem duplicar nas outras colunas). Isso
+  // é só pra exibição aqui; não mexe em collectPonto, então os totais (extraTotal/jantas) e todo
+  // resto que usa collectPonto continuam calculados só a partir dos dias com registro/férias real.
+  const porData={};
+  d.rows.forEach(r=>{porData[r.data]=r;});
+  const tkMax=todayKey();
+  const todasLinhas=[];
+  let cur=new Date(b.start);
+  const fimPeriodo=new Date(b.end);
+  while(cur<=fimPeriodo){
+    const dk=dateKey(cur);
+    if(dk>tkMax)break;
+    if(porData[dk]){
+      todasLinhas.push(porData[dk]);
+    }else{
+      const feriado=feriadoDe(dk);
+      if(cur.getDay()===0)todasLinhas.push({data:dk,domingo:true});
+      else if(feriado)todasLinhas.push({data:dk,feriado:feriado.nome});
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  const rows=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.domingo)return `<tr style="background:#000;color:#fff"><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic">Domingo</td><td style="text-align:center">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#000;color:#fff"><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700">Folga — Feriado: ${r.feriado}</td><td style="text-align:center">—</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
         <td>${r.entrada}</td><td>${r.saida}</td>
         <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
-      ).join('')
+        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+      }).join('')
     : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
   return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
     `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>

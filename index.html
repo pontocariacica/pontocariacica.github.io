@@ -1737,7 +1737,19 @@ function autoPreencherPontosEsquecidos(){
       const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       if(key<primeiraData)break; // não retroage antes do primeiro ponto real do colaborador
       const dow=d.getDay();
-      if(diaBloqueadoParaAuto(emp.nome,key,dow))continue; // domingo/feriado/férias — não é dia de trabalho
+      if(diaBloqueadoParaAuto(emp.nome,key,dow)){
+        // Domingo/feriado sem liberação do Admin (ou dia de férias) — não é dia de trabalho, então
+        // nunca preenche. E se esse dia JÁ tinha sido preenchido automaticamente antes de ficar
+        // bloqueado (ex.: um feriado cadastrado depois de já rodar o preenchimento, ou uma
+        // liberação de domingo/feriado que foi desfeita), desfaz esse preenchimento indevido agora
+        // — pedido do administrador: sem a liberação, o dia não pode aparecer como trabalhado nem
+        // contar hora extra. Nunca mexe se o dia foi corrigido por ajuste aprovado ou lançamento
+        // manual (removerAutoIndevido já protege isso).
+        const desfezEntrada=removerAutoIndevido(emp,key,'Entrada');
+        const desfezSaida=removerAutoIndevido(emp,key,'Saída');
+        if(desfezEntrada||desfezSaida)mudou=true;
+        continue;
+      }
       if(isPeriodClosed(emp.nome,periodBounds(d)))continue; // período já fechado — não mexe mais
       // Jornada do dia: sábado usa jornadaSab (horário próprio de cada colaborador, cadastrado no
       // perfil dele — ex.: um até 12h, outro até 11h), senão usa a jornada normal de segunda a sexta.
@@ -3744,7 +3756,7 @@ function espelhoSection(x,bounds){
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">🏖️ Férias</td><td>—</td></tr>`;
         if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Domingo</td><td>—</td></tr>`;
-        if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Feriado — ${r.feriado}</td><td>—</td></tr>`;
+        if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Folga — Feriado: ${r.feriado}</td><td>—</td></tr>`;
         return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`;
       }).join('')
     : `<tr><td colspan="6" class="empty">Sem registros no período</td></tr>`;
@@ -3774,7 +3786,7 @@ function espelhoSection(x,bounds){
     </table>
     <div class="ass"><div><span class="line"></span>Assinatura do Colaborador</div>
       <div><span class="line"></span>Assinatura do Administrador</div></div>
-    <div class="esp-foot">Documento gerado eletronicamente pelo sistema de ponto transauto em ${new Date().toLocaleString('pt-BR')}.${temAjuste?' * Horário corrigido por ajuste aprovado.':''}</div>
+    ${temAjuste?'<div class="esp-foot">* Horário corrigido por ajuste aprovado.</div>':''}
   </section>`;
 }
 function folhaDocHTML(inner){

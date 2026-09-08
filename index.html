@@ -971,8 +971,19 @@ function mergeUnionByKey(local,remote,keyFn){
   local.forEach(x=>{const k=keyFn(x);if(!out[k])out[k]=x;});
   return Object.values(out);
 }
-// Feriados: une pela data (chave natural) e combina a liberação (se qualquer um dos lados
-// liberou o registro nesse feriado, o resultado mesclado mantém liberado).
+// Feriados: une pela data (chave natural). O campo "liberado" é uma decisão explícita do Admin
+// (botão Liberar/Bloquear na tela Feriados) e precisa "pegar" nos dois sentidos — ANTES, a
+// mesclagem fazia só um OR entre os dois lados (ex.liberado||h.liberado): uma vez que qualquer
+// cópia (nuvem ou local) tivesse liberado=true, nunca mais dava pra bloquear de novo, porque a
+// próxima sincronização sempre trazia esse true antigo de volta por cima do false que o Admin
+// acabou de definir. Bug real encontrado em produção: o feriado de 7 de Setembro/2026 ficou
+// "liberado" (provavelmente um teste/engano antigo) e o Admin não conseguia mais bloquear —
+// toda tentativa de desfazer era imediatamente desfeita pela mesclagem seguinte, e o
+// preenchimento automático seguiu tratando o feriado como dia normal de trabalho pra todo mundo.
+// Correção: toggleLiberado agora grava "liberadoAt" (quando o Admin mexeu no botão). Aqui, quem
+// tem liberadoAt manda (reflete uma ação explícita e datada); entre dois lados com liberadoAt, o
+// mais recente vence; só cai de volta pro OR antigo quando NENHUM dos dois lados tem liberadoAt
+// (feriado que nunca teve o botão tocado — mantém compatibilidade com dados antigos).
 function mergeHolidays(local,remote){
   local=(local||[]).filter(Boolean);remote=(remote||[]).filter(Boolean);
   const out={};
@@ -980,7 +991,16 @@ function mergeHolidays(local,remote){
   local.forEach(h=>{
     const ex=out[h.data];
     if(!ex){out[h.data]={...h};return;}
-    out[h.data]={...ex,...h,liberado:!!(ex.liberado||h.liberado)};
+    let liberado,liberadoAt;
+    if(ex.liberadoAt&&h.liberadoAt){
+      const exMaisRecente=new Date(ex.liberadoAt).getTime()>=new Date(h.liberadoAt).getTime();
+      liberado=exMaisRecente?!!ex.liberado:!!h.liberado;
+      liberadoAt=exMaisRecente?ex.liberadoAt:h.liberadoAt;
+    }else if(ex.liberadoAt){liberado=!!ex.liberado;liberadoAt=ex.liberadoAt;}
+    else if(h.liberadoAt){liberado=!!h.liberado;liberadoAt=h.liberadoAt;}
+    else{liberado=!!(ex.liberado||h.liberado);}
+    out[h.data]={...ex,...h,liberado};
+    if(liberadoAt)out[h.data].liberadoAt=liberadoAt;else delete out[h.data].liberadoAt;
   });
   return Object.values(out).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
 }
@@ -3752,12 +3772,17 @@ function espelhoSection(x,bounds){
     }
     cur.setDate(cur.getDate()+1);
   }
+  // Colunas de horário/valor (Entrada, Saída, Hora extra, Janta) sempre centralizadas com a
+  // classe "tc" — pedido do administrador pra impressão sair com as colunas alinhadas. Não dá
+  // pra centralizar via CSS por posição (nth-child) porque as linhas de domingo/feriado/férias
+  // usam colspan e mudam a contagem de células da linha; por isso cada célula recebe a classe
+  // explicitamente, célula por célula, nas duas formas de linha.
   const body=todasLinhas.length
     ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">🏖️ Férias</td><td>—</td></tr>`;
-        if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Domingo</td><td>—</td></tr>`;
-        if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Folga — Feriado: ${r.feriado}</td><td>—</td></tr>`;
-        return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`;
+        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">🏖️ Férias</td><td class="tc">—</td></tr>`;
+        if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Domingo</td><td class="tc">—</td></tr>`;
+        if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Folga — Feriado: ${r.feriado}</td><td class="tc">—</td></tr>`;
+        return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc">${r.entrada}</td><td class="tc">${r.saida}</td><td class="tc${r.extraMin>0?' hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td class="tc">${r.janta?'Sim':'—'}</td></tr>`;
       }).join('')
     : `<tr><td colspan="6" class="empty">Sem registros no período</td></tr>`;
   return `<section class="esp">
@@ -3780,9 +3805,9 @@ function espelhoSection(x,bounds){
       <span>🍽️ Jantas no período: <b>${d.jantas}</b></span>
     </div>
     <table>
-      <thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída</th><th>Hora extra</th><th>Janta</th></tr></thead>
+      <thead><tr><th>Data</th><th>Dia</th><th class="tc">Entrada</th><th class="tc">Saída</th><th class="tc">Hora extra</th><th class="tc">Janta</th></tr></thead>
       <tbody>${body}</tbody>
-      <tfoot><tr class="tot"><td colspan="4">TOTAL DE HORAS EXTRAS NO PERÍODO</td><td>${d.extraTotal}</td><td></td></tr></tfoot>
+      <tfoot><tr class="tot"><td colspan="4">TOTAL DE HORAS EXTRAS NO PERÍODO</td><td class="tc">${d.extraTotal}</td><td></td></tr></tfoot>
     </table>
     <div class="ass"><div><span class="line"></span>Assinatura do Colaborador</div>
       <div><span class="line"></span>Assinatura do Administrador</div></div>
@@ -3814,7 +3839,7 @@ function folhaDocHTML(inner){
     .esp-meta{display:flex;gap:22px;font-size:11px;color:#3d4252;margin:0 0 8px;
       background:#eef1f8;border-radius:7px;padding:6px 12px}
     .esp-meta b{color:#0b0f19}
-    table{width:100%;border-collapse:collapse;font-size:10.5px}
+    table{width:100%;border-collapse:collapse;font-size:10.5px;font-variant-numeric:tabular-nums}
     thead th{background:#1f3a68;color:#fff;text-align:left;padding:5px 8px;font-weight:700;font-size:9.5px;
       text-transform:uppercase;letter-spacing:.3px}
     thead th:first-child{border-top-left-radius:6px}thead th:last-child{border-top-right-radius:6px}
@@ -3822,6 +3847,10 @@ function folhaDocHTML(inner){
     tbody tr:nth-child(even){background:#f7f8fb}
     tbody td.hasextra{color:#a06a00;font-weight:700}
     tbody td.empty{text-align:center;color:#8a90a2;padding:18px}
+    /* Colunas de horário/valor (Entrada, Saída, Hora extra, Janta) sempre centralizadas, no
+       cabeçalho, no corpo e no rodapé — pedido do administrador pra ficar tudo alinhado ao
+       imprimir, em vez de cada coluna ficando encostada à esquerda em posições diferentes. */
+    .tc{text-align:center}
     .adjmark{color:#1f3a68;font-weight:800}
     tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
     tr.offrow td{background:#f0f1f5!important;color:#6a7085;font-style:italic}
@@ -4132,7 +4161,10 @@ function adminHolidays(){
     <thead><tr><th>Data</th><th>Feriado</th><th>Abrangência</th><th>Registro</th><th>Ação</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
-function toggleLiberado(i){state.holidays[i].liberado=!state.holidays[i].liberado;render();
+function toggleLiberado(i){
+  state.holidays[i].liberado=!state.holidays[i].liberado;
+  state.holidays[i].liberadoAt=new Date().toISOString(); // marca a decisão do Admin — ver mergeHolidays
+  render();
   toast('Feriado atualizado',state.holidays[i].nome+': '+(state.holidays[i].liberado?'registro liberado':'bloqueado'),'info');}
 function sincronizarFeriados(){
   const novos=[{data:'2026-04-21',nome:'Tiradentes',tipo:'Nacional'},{data:'2026-05-01',nome:'Dia do Trabalho',tipo:'Nacional'}];

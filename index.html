@@ -3779,7 +3779,7 @@ function espelhoSection(x,bounds){
   // explicitamente, célula por célula, nas duas formas de linha.
   const body=todasLinhas.length
     ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">🏖️ Férias</td><td class="tc">Férias</td></tr>`;
+        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3"></td><td class="tc">🏖️ Férias</td></tr>`;
         if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Domingo</td><td class="tc">—</td></tr>`;
         if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Folga — Feriado: ${r.feriado}</td><td class="tc">—</td></tr>`;
         return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc">${r.entrada}</td><td class="tc">${r.saida}</td><td class="tc${r.extraMin>0?' hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td class="tc">${r.janta?'Sim':'—'}</td></tr>`;

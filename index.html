@@ -3779,7 +3779,7 @@ function espelhoSection(x,bounds){
   // explicitamente, célula por célula, nas duas formas de linha.
   const body=todasLinhas.length
     ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="4">🏖️ Férias</td></tr>`;
+        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">🏖️ Férias</td><td class="tc">Férias</td></tr>`;
         if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Domingo</td><td class="tc">—</td></tr>`;
         if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Folga — Feriado: ${r.feriado}</td><td class="tc">—</td></tr>`;
         return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc">${r.entrada}</td><td class="tc">${r.saida}</td><td class="tc${r.extraMin>0?' hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td class="tc">${r.janta?'Sim':'—'}</td></tr>`;
@@ -3824,6 +3824,10 @@ function folhaDocHTML(inner){
     @page{size:A4;margin:12mm 12mm}
     *{box-sizing:border-box}
     body{font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:0;color:#1a1d24;margin:0}
+    /* Sem isso, alguns navegadores/impressoras ignoram cor de fundo ao imprimir (economia de
+       tinta) mesmo com !important no seletor — a linha de domingo/feriado podia sair sem o
+       preto de fundo, só com o texto branco por cima (ilegível). Força sempre imprimir as cores. */
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
     .esp{margin-bottom:30px;padding-bottom:6px}
     .esp-head{display:flex;align-items:center;justify-content:space-between;gap:16px;
       padding-bottom:9px;margin-bottom:10px;border-bottom:3px solid #1f3a68}
@@ -3853,7 +3857,7 @@ function folhaDocHTML(inner){
     .tc{text-align:center}
     .adjmark{color:#1f3a68;font-weight:800}
     tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
-    tr.offrow td{background:#f0f1f5!important;color:#6a7085;font-style:italic}
+    tr.offrow td{background:#000!important;color:#fff!important;font-style:italic}
     tr.feriadorow td{font-style:normal;font-weight:700}
     tfoot .tot td{background:#e6ecf6;font-weight:800;font-size:11.5px;color:#14284d;padding:6px 8px;border-top:2px solid #1f3a68}
     .ass{display:flex;justify-content:space-around;gap:30px;margin-top:26px;font-size:11px;text-align:center;color:#3d4252}

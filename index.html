@@ -3712,28 +3712,51 @@ function espelhoData(empName,bounds){
 }
 function espelhoSection(x,bounds){
   const st=folhaBadge[x.status]?folhaBadge[x.status][1]:(x.status||'—');
+  const b=bounds||currentPeriod();
   const d=espelhoData(x.emp,bounds);
   const emp=(state.employees||[]).find(e=>e.nome===x.emp);
-  const matricula=emp?empMatricula(emp):'—';
   const cargo=emp?[emp.setor,emp.funcao].filter(Boolean).join(' • '):'';
   const temAjuste=d.rows.some(r=>r.ajustado);
-  const body=d.rows.length
-    ? d.rows.map(r=>r.ferias
-        ? `<tr class="feriasrow"><td>${fmtd(r.data)}</td><td>${diaSemanaExt(r.data)}</td><td colspan="3" style="text-align:center">🏖️ Férias</td><td>—</td></tr>`
-        : `<tr><td>${fmtd(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaExt(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`
-      ).join('')
+  // Monta uma linha para CADA dia do período — não só os dias com ponto batido. Além dos dias
+  // reais (vindos de espelhoData/collectPonto), inclui explicitamente domingos e feriados sem
+  // nenhum registro, pra que o espelho impresso mostre o período inteiro, dia a dia (pedido do
+  // administrador). Dias de semana/sábado sem nenhum registro continuam de fora, como sempre foi
+  // — isso nunca inventa hora trabalhada, só deixa visível que aquele dia era domingo/feriado.
+  const porData={};
+  d.rows.forEach(r=>{porData[r.data]=r;});
+  const tkMax=todayKey();
+  const todasLinhas=[];
+  let cur=new Date(b.start);
+  const fimPeriodo=new Date(b.end);
+  while(cur<=fimPeriodo){
+    const dk=dateKey(cur);
+    if(dk>tkMax)break; // nunca lista dia futuro, igual ao resto do sistema
+    if(porData[dk]){
+      todasLinhas.push(porData[dk]);
+    }else{
+      const feriado=feriadoDe(dk);
+      if(cur.getDay()===0)todasLinhas.push({data:dk,domingo:true});
+      else if(feriado)todasLinhas.push({data:dk,feriado:feriado.nome});
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  const body=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">🏖️ Férias</td><td>—</td></tr>`;
+        if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Domingo</td><td>—</td></tr>`;
+        if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td colspan="3" style="text-align:center">Feriado — ${r.feriado}</td><td>—</td></tr>`;
+        return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td>${r.entrada}</td><td>${r.saida}</td><td class="${r.extraMin>0?'hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td>${r.janta?'Sim':'—'}</td></tr>`;
+      }).join('')
     : `<tr><td colspan="6" class="empty">Sem registros no período</td></tr>`;
   return `<section class="esp">
     <header class="esp-head">
-      <svg class="esp-logo" viewBox="0 0 470 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="transauto">
-        <text x="20" y="94" font-family="'Arial Black','Arial Narrow',Arial,system-ui,sans-serif" font-weight="900" font-style="italic" font-size="90" letter-spacing="-5" fill="#14284d">transauto</text>
-      </svg>
+      <div class="esp-filial">FILIAL CARIACICA/ES</div>
       <div class="esp-doctitle">Espelho de Ponto<small>Registro eletrônico de ponto</small></div>
     </header>
     <div class="esp-info">
       <div class="esp-emp">
         <b>${x.emp}</b>
-        <small>Matrícula ${matricula}${cargo?' • '+cargo:''}</small>
+        ${cargo?`<small>${cargo}</small>`:''}
       </div>
       <div class="esp-period">
         <small>PERÍODO</small>
@@ -3755,39 +3778,46 @@ function espelhoSection(x,bounds){
   </section>`;
 }
 function folhaDocHTML(inner){
+  // Tamanho de fonte e espaçamentos enxutos de propósito: o período inteiro (até 31 dias, agora
+  // incluindo domingos e feriados — ver espelhoSection) precisa caber inteiro numa ÚNICA página.
+  // Antes, um período cheio estourava pra uma segunda página e, com impressoras configuradas pra
+  // frente-e-verso, essa sobra saía impressa no verso da folha — pedido do administrador foi
+  // manter tudo sempre na frente, então aqui a prioridade é nunca deixar a tabela transbordar.
   return `<html><head><meta charset="utf-8"><title>Espelho de Ponto — transauto</title><style>
-    @page{margin:22mm 16mm}
+    @page{size:A4;margin:12mm 12mm}
     *{box-sizing:border-box}
     body{font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:0;color:#1a1d24;margin:0}
     .esp{margin-bottom:30px;padding-bottom:6px}
     .esp-head{display:flex;align-items:center;justify-content:space-between;gap:16px;
-      padding-bottom:14px;margin-bottom:16px;border-bottom:3px solid #1f3a68}
-    .esp-logo{height:30px;width:auto}
-    .esp-doctitle{text-align:right;font-size:16px;font-weight:800;color:#1f3a68;line-height:1.3}
-    .esp-doctitle small{display:block;font-size:10.5px;font-weight:600;color:#7a8399;letter-spacing:.3px;text-transform:uppercase}
-    .esp-info{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:10px}
-    .esp-emp b{font-size:15px;display:block;color:#0b0f19}
-    .esp-emp small{color:#5a6072;font-size:11.5px}
+      padding-bottom:9px;margin-bottom:10px;border-bottom:3px solid #1f3a68}
+    .esp-filial{font-size:15px;font-weight:900;letter-spacing:.4px;color:#14284d}
+    .esp-doctitle{text-align:right;font-size:15px;font-weight:800;color:#1f3a68;line-height:1.3}
+    .esp-doctitle small{display:block;font-size:10px;font-weight:600;color:#7a8399;letter-spacing:.3px;text-transform:uppercase}
+    .esp-info{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:7px}
+    .esp-emp b{font-size:14px;display:block;color:#0b0f19}
+    .esp-emp small{color:#5a6072;font-size:11px}
     .esp-period{text-align:right}
-    .esp-period small{display:block;font-size:9.5px;color:#7a8399;letter-spacing:.6px;font-weight:700}
-    .esp-period b{font-size:13.5px;color:#1f3a68}
-    .esp-meta{display:flex;gap:22px;font-size:11.5px;color:#3d4252;margin:0 0 12px;
-      background:#eef1f8;border-radius:8px;padding:9px 14px}
+    .esp-period small{display:block;font-size:9px;color:#7a8399;letter-spacing:.6px;font-weight:700}
+    .esp-period b{font-size:13px;color:#1f3a68}
+    .esp-meta{display:flex;gap:22px;font-size:11px;color:#3d4252;margin:0 0 8px;
+      background:#eef1f8;border-radius:7px;padding:6px 12px}
     .esp-meta b{color:#0b0f19}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    thead th{background:#1f3a68;color:#fff;text-align:left;padding:8px 10px;font-weight:700;font-size:10.5px;
+    table{width:100%;border-collapse:collapse;font-size:10.5px}
+    thead th{background:#1f3a68;color:#fff;text-align:left;padding:5px 8px;font-weight:700;font-size:9.5px;
       text-transform:uppercase;letter-spacing:.3px}
     thead th:first-child{border-top-left-radius:6px}thead th:last-child{border-top-right-radius:6px}
-    tbody td{padding:7px 10px;border-bottom:1px solid #e4e7ee;color:#22262f}
+    tbody td{padding:3px 8px;border-bottom:1px solid #e4e7ee;color:#22262f;line-height:1.35}
     tbody tr:nth-child(even){background:#f7f8fb}
     tbody td.hasextra{color:#a06a00;font-weight:700}
     tbody td.empty{text-align:center;color:#8a90a2;padding:18px}
     .adjmark{color:#1f3a68;font-weight:800}
     tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
-    tfoot .tot td{background:#e6ecf6;font-weight:800;font-size:12px;color:#14284d;padding:9px 10px;border-top:2px solid #1f3a68}
-    .ass{display:flex;justify-content:space-around;gap:30px;margin-top:44px;font-size:11px;text-align:center;color:#3d4252}
+    tr.offrow td{background:#f0f1f5!important;color:#6a7085;font-style:italic}
+    tr.feriadorow td{background:#fdeaea!important;color:#a03c3c;font-style:normal;font-weight:600}
+    tfoot .tot td{background:#e6ecf6;font-weight:800;font-size:11.5px;color:#14284d;padding:6px 8px;border-top:2px solid #1f3a68}
+    .ass{display:flex;justify-content:space-around;gap:30px;margin-top:26px;font-size:11px;text-align:center;color:#3d4252}
     .ass .line{display:block;border-top:1px solid #8a90a2;margin-bottom:6px;padding-top:6px}
-    .esp-foot{margin-top:16px;font-size:9.5px;color:#9aa0b0;text-align:center}
+    .esp-foot{margin-top:10px;font-size:9px;color:#9aa0b0;text-align:center}
     .pb{page-break-after:always}
   </style></head><body>${inner}</body></html>`;
 }
@@ -4299,6 +4329,11 @@ function kpi(ic,c,lbl,val,arg1='',arg2=''){
 }
 function fmtd(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
 function diaSemanaExt(iso){const dt=new Date(iso+'T12:00:00');return ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][dt.getDay()];}
+// Versões abreviadas usadas no espelho de ponto impresso (pedido do administrador: data sem
+// o ano, e o dia da semana em 3 letras — ex.: "16/07" / "Seg" — pra economizar espaço e caber
+// o período inteiro numa única página, sem sair frente e verso).
+function fmtdCurto(iso){const [,m,d]=iso.split('-');return `${d}/${m}`;}
+function diaSemanaAbrev(iso){const dt=new Date(iso+'T12:00:00');return ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dt.getDay()];}
 tick();
 initPersistence();
 initSupabase();

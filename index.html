@@ -24,6 +24,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <!-- ===== Supabase — cópia de segurança em dobro dos dados (além do Firebase) ===== -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- ===== Geração de PDF na impressão (espelho/folha/relatórios) — usadas pra gerar um PDF de
+     verdade em vez de chamar o print() do navegador, que sempre adiciona um cabeçalho/rodapé
+     padrão (URL + número da página) por cima do conteúdo impresso. Ver função printHTML. ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 /* ============================ TEMA / PALETA ============================ */
 :root{
@@ -3924,9 +3929,12 @@ function folhaDocHTML(inner){
   // frente-e-verso, essa sobra saía impressa no verso da folha — pedido do administrador foi
   // manter tudo sempre na frente, então aqui a prioridade é nunca deixar a tabela transbordar.
   return `<html><head><meta charset="utf-8"><title>Espelho de Ponto — transauto</title><style>
-    @page{size:A4;margin:12mm 12mm}
+    @page{size:A4;margin:0}
     *{box-sizing:border-box}
-    body{font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:0;color:#1a1d24;margin:0}
+    /* Largura e margem fixas em mm (em vez de depender do @page, que só valia quando a página
+       era impressa direto pelo navegador) — agora o conteúdo é capturado e vira um PDF de
+       verdade (ver printHTML), então o próprio body precisa já nascer do tamanho de uma A4. */
+    body{font-family:'Segoe UI',system-ui,Arial,sans-serif;width:210mm;padding:12mm;color:#1a1d24;margin:0}
     /* Sem isso, alguns navegadores/impressoras ignoram cor de fundo ao imprimir (economia de
        tinta) mesmo com !important no seletor — a linha de domingo/feriado podia sair sem o
        preto de fundo, só com o texto branco por cima (ilegível). Força sempre imprimir as cores. */
@@ -3981,8 +3989,8 @@ function imprimirPonto(emp,bounds){
   const fechouSet=new Set(fechadosNoPeriodo(periodKey(b)).map(x=>x.emp));
   const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const status=fechouSet.has(emp)?'fechado':(collectPonto(emp,inPeriod).dias>0?'aberto':'pendencia');
-  printHTML(folhaDocHTML(espelhoSection({emp,status},bounds)));
-  toast('Espelho gerado',emp+' • use a impressão para salvar em PDF.','info');
+  printHTML(folhaDocHTML(espelhoSection({emp,status},bounds)),'Espelho de Ponto - '+emp+' - '+periodLabel(b));
+  toast('Gerando PDF',emp+' • o arquivo será baixado em instantes.','info');
 }
 // Um fechamento por colaborador (sem duplicar) para um período específico.
 function fechadosNoPeriodo(pk){
@@ -4007,8 +4015,8 @@ function imprimirFolhaDoPeriodo(pk){
   const xs=fechados.map(f=>({emp:f.emp,status:'fechado'}));
   const pb=periodBoundsFromKey(pk);
   const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,pb)}</div>`).join('');
-  printHTML(folhaDocHTML(inner));
-  toast('Impressão em lote',`${xs.length} ponto(s) fechado(s) do período.`,'info');
+  printHTML(folhaDocHTML(inner),'Fechamento de Folha - '+periodLabel(pb));
+  toast('Gerando PDF',`${xs.length} ponto(s) fechado(s) do período • pode levar alguns segundos.`,'info');
 }
 function imprimirFolhaTodos(){
   imprimirFolhaDoPeriodo(periodKey(previousPeriod()));
@@ -4059,8 +4067,8 @@ function confirmImprimirPorPeriodo(){
   const xs=ativos.map(e=>({emp:e.nome,status:fechouSet.has(e.nome)?'fechado':(collectPonto(e.nome,inPeriod).dias>0?'aberto':'pendencia')}));
   const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,b)}</div>`).join('');
   closeModal();
-  printHTML(folhaDocHTML(inner));
-  toast('Impressão em lote',`${xs.length} colaborador(es) • ${periodLabel(b)}.`,'info');
+  printHTML(folhaDocHTML(inner),'Fechamento de Folha - Todos - '+periodLabel(b));
+  toast('Gerando PDF',`${xs.length} colaborador(es) • ${periodLabel(b)} • pode levar alguns segundos.`,'info');
 }
 // Colaborador com atividade no período informado que ainda não fechou (mesmo critério usado
 // pelo aviso "período anterior em aberto" mostrado para o colaborador).
@@ -4370,10 +4378,46 @@ function reportData(name){
     r:state.employees.map(e=>[e.nome,e.email,e.setor,e.funcao,e.escala,e.jornada,e.banco,e.status])};
 }
 function dl(blob,fname){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);}
-function printHTML(html){
-  const f=document.createElement('iframe');f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  document.body.appendChild(f);const d=f.contentWindow.document;d.open();d.write(html);d.close();
-  setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}setTimeout(()=>f.remove(),1500);},350);
+// Tira caracteres que não podem ir em nome de arquivo (barra, dois-pontos etc. — datas como
+// "16/06/2026" quebrariam o download se fossem direto pro nome do PDF).
+function safeFn(s){return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim();}
+// Gera um PDF de verdade a partir do HTML, em vez de abrir a impressão nativa do navegador
+// (window.print()). Motivo: imprimir uma página HTML direto SEMPRE vem com o cabeçalho/rodapé
+// padrão do Chrome (a URL do site + número da página) por cima do conteúdo, e isso não dá pra
+// desligar por código — só desmarcando manualmente no diálogo de impressão, a cada computador.
+// Um PDF já pronto não passa por isso, porque na hora de imprimir ele não é mais "uma página
+// sendo impressa", é um arquivo comum — por isso a solução é gerar o arquivo aqui mesmo.
+async function printHTML(html,filename){
+  const f=document.createElement('iframe');
+  f.style.cssText='position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0';
+  document.body.appendChild(f);
+  const d=f.contentWindow.document;d.open();d.write(html);d.close();
+  try{
+    await new Promise(res=>setTimeout(res,350)); // tempo pra fontes/estilos renderizarem
+    f.style.height=d.body.scrollHeight+'px'; // libera o iframe pra capturar tudo (relatórios longos incluso)
+    await new Promise(res=>setTimeout(res,30));
+    const canvas=await html2canvas(d.body,{scale:2,backgroundColor:'#fff',windowWidth:d.body.scrollWidth});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({unit:'mm',format:'a4'});
+    const pageW=pdf.internal.pageSize.getWidth(),pageH=pdf.internal.pageSize.getHeight();
+    const imgW=pageW,imgH=canvas.height*imgW/canvas.width;
+    const imgData=canvas.toDataURL('image/jpeg',0.92);
+    let heightLeft=imgH,position=0;
+    pdf.addImage(imgData,'JPEG',0,position,imgW,imgH);
+    heightLeft-=pageH;
+    while(heightLeft>0){
+      position=heightLeft-imgH;
+      pdf.addPage();
+      pdf.addImage(imgData,'JPEG',0,position,imgW,imgH);
+      heightLeft-=pageH;
+    }
+    pdf.save(safeFn(filename||'documento')+'.pdf');
+  }catch(e){
+    console.error('Falha ao gerar PDF da impressão',e);
+    toast('Erro ao gerar PDF','Não foi possível gerar o arquivo. Tente novamente.','err');
+  }finally{
+    f.remove();
+  }
 }
 function reportHTML(name,d){
   // Nota: este relatório NÃO é referente a um período de folha (é uma listagem geral, ex.: cadastro
@@ -4394,7 +4438,7 @@ function exportReport(name,fmt){
     dl(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}),fn+'.csv');
   }else if(fmt==='Excel'){
     dl(new Blob([reportHTML(name,d)],{type:'application/vnd.ms-excel'}),fn+'.xls');
-  }else{ printHTML(reportHTML(name,d)); }
+  }else{ printHTML(reportHTML(name,d),fn); toast('Gerando PDF',`${name} • o arquivo será baixado em instantes.`,'info'); return; }
   toast('Relatório gerado',`${name} • ${fmt}`,'info');
 }
 function gerarEspelho(nome){

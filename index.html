@@ -3376,7 +3376,7 @@ function adminRegAcompanhar(){
   const rows=d.rows.length
     ? d.rows.map(r=>r.ferias
         ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td></tr>`
-        : `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
+        : `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`
       ).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   return `<div class="card">

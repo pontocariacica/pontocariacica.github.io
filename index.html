@@ -2319,7 +2319,7 @@ function colabHistory(){
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#d03b3b"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
         <td>${r.entrada}</td><td>${r.saida}</td>
         <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
@@ -2561,7 +2561,7 @@ function colabAcompanhar(){
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#d03b3b"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
@@ -2633,7 +2633,7 @@ function verPontosAnterioresDetalhe(k){
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#000"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#d03b3b"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
@@ -3937,7 +3937,7 @@ function folhaDocHTML(inner){
     .adjmark{color:#1f3a68;font-weight:800}
     tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
     tr.offrow td{background:#000!important;color:#fff!important;font-style:italic}
-    tr.feriadorow td{font-style:normal;font-weight:700}
+    tr.feriadorow td{background:#d03b3b!important;color:#fff!important;font-style:normal;font-weight:700}
     tfoot .tot td{background:#e6ecf6;font-weight:800;font-size:11.5px;color:#14284d;padding:6px 8px;border-top:2px solid #1f3a68}
     .ass{display:flex;justify-content:space-around;gap:30px;margin-top:26px;font-size:11px;text-align:center;color:#3d4252}
     .ass .line{display:block;border-top:1px solid #8a90a2;margin-bottom:6px;padding-top:6px}

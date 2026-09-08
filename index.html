@@ -389,7 +389,7 @@ html[data-theme="dark"] .sup-status{color:var(--green)}
 @keyframes notifPop{0%{transform:scale(1)}35%{transform:scale(1.55)}65%{transform:scale(.9)}100%{transform:scale(1)}}
 .notif .dot.pulse{animation:notifPop .55s cubic-bezier(.3,1.4,.4,1)}
 @keyframes bellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(-14deg)}30%{transform:rotate(11deg)}45%{transform:rotate(-8deg)}60%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}}
-.icon-btn.notif.ring{animation:bellRing .5s ease}
+.icon-btn.notif.bell-ring{animation:bellRing .5s ease}
 
 /* ===== Destaque quando um status muda (ajuste aprovado/recusado, etc.) ===== */
 @keyframes rowFlash{0%{background:rgba(37,99,235,.16)}100%{background:transparent}}
@@ -1543,10 +1543,10 @@ function updateNotifBadge(){
   if(unread>_lastUnreadCount){
     dot.classList.remove('pulse');
     const bell=document.querySelector('.icon-btn.notif');
-    if(bell)bell.classList.remove('ring');
+    if(bell)bell.classList.remove('bell-ring');
     void dot.offsetWidth;
     dot.classList.add('pulse');
-    if(bell){void bell.offsetWidth;bell.classList.add('ring');}
+    if(bell){void bell.offsetWidth;bell.classList.add('bell-ring');}
   }
   _lastUnreadCount=unread;
 }

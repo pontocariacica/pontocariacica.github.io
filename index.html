@@ -131,20 +131,20 @@ a{color:var(--blue);text-decoration:none}
 #app{display:none;min-height:100vh}
 .layout{display:grid;grid-template-columns:266px 1fr;min-height:100vh;transition:grid-template-columns .25s}
 .layout.collapsed{grid-template-columns:74px 1fr}
-.sidebar{background:var(--surface-1);border-right:1px solid var(--border);padding:16px 12px;
+.sidebar{background:var(--blue);--logo-ink:#fff;border-right:1px solid var(--border);padding:16px 12px;
   position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
 .side-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
 .side-brand .logo{width:36px;height:36px;font-size:16px;border-radius:10px}
 .side-brand span{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden}
-.nav-i{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:var(--text-2);
+.nav-i{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:rgba(255,255,255,.82);
   font-weight:600;font-size:14px;border:none;background:none;width:100%;text-align:left;white-space:nowrap}
-.nav-i:hover{background:var(--surface-2);color:var(--text-1)}
-.nav-i.active{background:linear-gradient(135deg,rgba(31,58,104,.18),rgba(60,98,164,.14));color:var(--blue);box-shadow:inset 3px 0 0 var(--blue)}
+.nav-i:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-i.active{background:rgba(255,255,255,.16);color:#fff;box-shadow:inset 3px 0 0 #fff}
 .nav-i .ic{width:22px;text-align:center;font-size:17px;flex:0 0 22px}
 .nav-i>span:not(.ic):not(.badge){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-badge{flex:0 0 auto}
 .layout.collapsed .side-brand span,.layout.collapsed .nav-i span,.layout.collapsed .nav-sec{display:none}
-.nav-sec{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 12px 4px}
+.nav-sec{font-size:11px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;padding:14px 12px 4px}
 .nav-badge{animation:navpulse 1.7s ease-in-out infinite;padding:3px 8px;font-size:11px;margin-left:8px}
 @keyframes navpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
 .layout.collapsed .nav-badge{margin-left:0 !important;position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 3px;font-size:10px}

@@ -1262,15 +1262,19 @@ function myDayEnsure(){const id=state.user&&state.user.id;const st=empStore(id);
 /* ============================ JORNADA / HORA EXTRA ============================ */
 function parseHM(hm){const [h,m]=hm.split(':').map(Number);const d=new Date();d.setHours(h,m,0,0);return d;}
 function fmtMin(m){m=Math.max(0,Math.round(m));const h=Math.floor(m/60),mm=m%60;return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;}
-// Valor do ticket (alimentação): R$33,00 por dia trabalhado + R$33,00 extra por cada janta
-// registrada no período (saída após 18:59). Dias de férias não entram na conta.
+// Valor do ticket (alimentação): já existe um ticket-base fixo de R$33,00 x 26 dias = R$858,00
+// pelo mês padrão de trabalho (isso o colaborador já recebe, não é calculado aqui). O que este
+// painel soma é só o EXTRA: R$33,00 por cada janta registrada no período (saída após 18:59) —
+// cada janta sempre soma mais R$33,00 ao total, iguala a base sempre que uma nova é batida.
 const TICKET_DIA=33;
+const TICKET_DIAS_PADRAO=26;
+const TICKET_BASE=TICKET_DIAS_PADRAO*TICKET_DIA; // R$858,00
 function fmtBRL(n){return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function ticketInfo(per){
-  const diasTrabalhados=Math.max(0,(per.dias||0)-(per.feriasDias||0));
   const jantas=per.jantas||0;
-  const valor=(diasTrabalhados+jantas)*TICKET_DIA;
-  return {diasTrabalhados,jantas,valor,valorFmt:fmtBRL(valor)};
+  const extraJantas=jantas*TICKET_DIA;
+  const valor=TICKET_BASE+extraJantas;
+  return {diasPadrao:TICKET_DIAS_PADRAO,jantas,extraJantas,valor,valorFmt:fmtBRL(valor)};
 }
 function hmToMin(hm){const [h,m]=String(hm).split(':').map(Number);return (h||0)*60+(m||0);}
 // Desconto fixo de 1h de almoço (12:00–13:00): retorna quantos minutos do intervalo
@@ -2230,9 +2234,10 @@ function colabDashboard(){
     </div>
   </div>`;
 }
-// Card do "Ticket do período" no painel inicial do colaborador: R$33,00 por dia trabalhado
-// + R$33,00 por cada janta (saída registrada após 18:59). Ex.: 26 dias trabalhados = R$858,00;
-// com 19 jantas no mês, soma-se +19×R$33,00 ao total.
+// Card do "Ticket do período" no painel inicial do colaborador: parte de uma base fixa de
+// R$858,00 (26 dias × R$33,00, o ticket padrão que o colaborador já recebe) e vai SOMANDO
+// R$33,00 a mais para cada janta registrada no período (saída após 18:59) — cada nova janta
+// sempre soma mais R$33,00 em cima do total, nunca substitui.
 function ticketCard(per){
   const tk=ticketInfo(per);
   return `<div class="card" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(31,58,104,.08),rgba(60,98,164,.04))">
@@ -2240,7 +2245,7 @@ function ticketCard(per){
       <div class="sub" style="margin:0 0 6px">🎫 Ticket do período</div>
       <div style="font-size:28px;font-weight:800;color:var(--text-1)">R$ ${tk.valorFmt}</div>
       <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
-        ${tk.diasTrabalhados} dia(s) trabalhado(s) + ${tk.jantas} janta(s) × R$ ${fmtBRL(TICKET_DIA)}
+        Base: ${tk.diasPadrao} dias × R$ ${fmtBRL(TICKET_DIA)} = R$ ${fmtBRL(TICKET_BASE)} + ${tk.jantas} janta(s) × R$ ${fmtBRL(TICKET_DIA)} (R$ ${fmtBRL(tk.extraJantas)})
       </div>
     </div>
     <div style="font-size:40px;line-height:1">🎫</div>

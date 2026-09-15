@@ -2735,7 +2735,13 @@ function collectPonto(empName,keep){
       let prevista=previstaWeekday;                 // seg. a sex.
       if(dow===6)prevista=previstaSab;              // sábado: jornada reduzida
       if(dow===0)prevista=0;                        // domingo: descanso -> tudo é hora extra
-      if(feriadoDe(d))prevista=0;                   // feriado: tudo é hora extra
+      // feriado: só conta tudo como hora extra se o feriado NÃO foi liberado. Um feriado marcado
+      // liberado:true (ver holidays/diaBloqueadoParaAuto) foi aberto pelo admin pra funcionar como
+      // dia normal — Douglas Pereira trabalhou o feriado de 7/9 (liberado) na jornada normal
+      // 07:00–17:00 e, antes desta correção, os 9h inteiras apareciam como hora extra no Acompanhar
+      // Ponto/espelho/folha, dando a impressão de que o dia "não tinha sido adicionado direito".
+      const feriado=feriadoDe(d);
+      if(feriado&&!feriado.liberado)prevista=0;
       extraMin=Math.max(0,worked-prevista);   // hora extra: o que passou da jornada prevista do dia
       extraTotalMin+=extraMin;
     }

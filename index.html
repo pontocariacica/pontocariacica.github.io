@@ -650,6 +650,15 @@ const state = {
   registros:[],
   folhaFechada:false,
   closedPeriods:{}, // nome do colaborador -> lista de períodos fechados (chave AAAA-MM do início)
+  // periodClosedAt/periodReopenedAt: nome -> periodKey -> timestamp ISO do último fechamento/reabertura.
+  // closedPeriods nunca perde uma chave (a mesclagem com a nuvem é só união — ver mergeClosedPeriods),
+  // então "reabrir" não pode ser feito removendo o período dali (a próxima mesclagem trazia de volta,
+  // igual ao bug já visto com deletedKeys/holidays). Em vez disso, isPeriodClosed compara qual dos
+  // dois eventos foi mais recente: se foi reaberto DEPOIS do último fechamento registrado, o período
+  // conta como aberto — mesmo continuando na lista de closedPeriods (que agora é só um histórico de
+  // "já foi fechado alguma vez").
+  periodClosedAt:{},
+  periodReopenedAt:{},
   fechamentos:[], // fechamentos de ponto feitos pelos colaboradores (o Admin vê aqui)
   config:{liberarDomingo:false,liberarFeriado:false}, // liberações de registro definidas pelo Admin
   lastGeo:null,
@@ -865,7 +874,7 @@ try{setInterval(flushSupabaseDeleteQueue,60000);}catch(e){}
 try{setInterval(flushSupabaseSnapshot,60000);}catch(e){}
 try{setInterval(reconcileSupabaseRegistros,5*60*1000);}catch(e){}
 
-const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','fechamentos','punchesByEmp','config','suporte'];
+const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','periodClosedAt','periodReopenedAt','fechamentos','punchesByEmp','config','suporte'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
 
 function stableJSON(src){const o={};PERSIST_KEYS.forEach(k=>o[k]=src?src[k]:undefined);return JSON.stringify(o);}
@@ -979,6 +988,25 @@ function mergeClosedPeriods(local,remote){
   const out={};
   const names=new Set([...Object.keys(local||{}),...Object.keys(remote||{})]);
   names.forEach(n=>{out[n]=Array.from(new Set([...(remote&&remote[n]||[]),...(local&&local[n]||[])]));});
+  return out;
+}
+// Mescla um mapa aninhado nome -> periodKey -> timestamp ISO, mantendo sempre o timestamp mais
+// recente de cada par (nome,periodKey). Usado por periodClosedAt/periodReopenedAt: como cada folha
+// só guarda "quando" o último fechamento/reabertura aconteceu, mesclar é só pegar o evento mais
+// novo — nunca perde histórico e nunca precisa remover nada (ver comentário perto de closedPeriods).
+function mergeTimestampMap(local,remote){
+  const out={};
+  const names=new Set([...Object.keys(local||{}),...Object.keys(remote||{})]);
+  names.forEach(n=>{
+    const l=(local&&local[n])||{}, r=(remote&&remote[n])||{};
+    const pks=new Set([...Object.keys(l),...Object.keys(r)]);
+    const merged={};
+    pks.forEach(pk=>{
+      const lv=l[pk],rv=r[pk];
+      merged[pk]=(lv&&rv)?(new Date(lv).getTime()>=new Date(rv).getTime()?lv:rv):(lv||rv);
+    });
+    out[n]=merged;
+  });
   return out;
 }
 function mergePunchesByEmp(local,remote){
@@ -1117,6 +1145,8 @@ function applyRemote(data){
     else if(k==='suporte'){state.suporte=mergeByIdLastWriteWinsSorted(state.suporte,data.suporte,x=>'id:'+x.id,x=>x._ts||x.id||0);}
     else if(k==='fechamentos'){state.fechamentos=mergeByIdLastWriteWins(state.fechamentos,data.fechamentos,x=>[x.emp,x.periodKey,x.tipo].join('|'),x=>x._ts||0);}
     else if(k==='closedPeriods'){state.closedPeriods=mergeClosedPeriods(state.closedPeriods,data.closedPeriods);}
+    else if(k==='periodClosedAt'){state.periodClosedAt=mergeTimestampMap(state.periodClosedAt,data.periodClosedAt);}
+    else if(k==='periodReopenedAt'){state.periodReopenedAt=mergeTimestampMap(state.periodReopenedAt,data.periodReopenedAt);}
     else if(k==='holidays'){state.holidays=mergeHolidays(state.holidays,data.holidays);}
     else if(k==='escalas'){state.escalas=mergeEscalas(state.escalas,data.escalas);}
     else if(k==='logs'){state.logs=mergeLogs(state.logs,data.logs);}
@@ -1156,6 +1186,8 @@ async function saveToCloudMerged(data){
     merged.fechamentos=mergeByIdLastWriteWins(data.fechamentos,remoto.fechamentos,x=>[x.emp,x.periodKey,x.tipo].join('|'),x=>x._ts||0);
     merged.punchesByEmp=mergePunchesByEmp(data.punchesByEmp,remoto.punchesByEmp);
     merged.closedPeriods=mergeClosedPeriods(data.closedPeriods,remoto.closedPeriods);
+    merged.periodClosedAt=mergeTimestampMap(data.periodClosedAt,remoto.periodClosedAt);
+    merged.periodReopenedAt=mergeTimestampMap(data.periodReopenedAt,remoto.periodReopenedAt);
     merged.holidays=mergeHolidays(data.holidays,remoto.holidays);
     merged.escalas=mergeEscalas(data.escalas,remoto.escalas);
     merged.logs=mergeLogs(data.logs,remoto.logs);
@@ -1197,6 +1229,7 @@ async function saveToCloudMerged(data){
     state.registros=merged.registros; state.adjustments=merged.adjustments; state.notifications=merged.notifications;
     state.vacations=merged.vacations; state.deletedKeys=merged.deletedKeys;
     state.fechamentos=merged.fechamentos; state.punchesByEmp=merged.punchesByEmp; state.closedPeriods=merged.closedPeriods;
+    state.periodClosedAt=merged.periodClosedAt; state.periodReopenedAt=merged.periodReopenedAt;
     state.holidays=merged.holidays; state.escalas=merged.escalas; state.logs=merged.logs;
     state.employees=merged.employees; state.afastamentos=merged.afastamentos;
     // 'suporte' também passa por mesclagem (linha acima, mergeByIdLastWriteWinsSorted) mas ficou de
@@ -1753,8 +1786,35 @@ function periodBoundsFromKey(pk){
   const [y,m]=pk.split('-').map(Number);
   return periodBounds(new Date(y,m-1,16));
 }
-const isPeriodClosed=(nome,b)=>(state.closedPeriods[nome]||[]).includes(periodKey(b));
-function closePeriod(nome,b){const k=periodKey(b);state.closedPeriods[nome]=state.closedPeriods[nome]||[];if(!state.closedPeriods[nome].includes(k))state.closedPeriods[nome].push(k);}
+// Fechado = está na lista closedPeriods E não foi reaberto DEPOIS do último fechamento registrado
+// (ver comentário perto de periodClosedAt/periodReopenedAt na definição do state). Sem timestamp de
+// reabertura registrado, mantém o comportamento de sempre (fechado = só olha closedPeriods).
+const isPeriodClosed=(nome,b)=>{
+  const k=periodKey(b);
+  if(!(state.closedPeriods[nome]||[]).includes(k))return false;
+  const reopenedAt=state.periodReopenedAt&&state.periodReopenedAt[nome]&&state.periodReopenedAt[nome][k];
+  if(!reopenedAt)return true;
+  const closedAt=state.periodClosedAt&&state.periodClosedAt[nome]&&state.periodClosedAt[nome][k];
+  return !!closedAt&&new Date(closedAt).getTime()>new Date(reopenedAt).getTime();
+};
+function closePeriod(nome,b){
+  const k=periodKey(b);
+  state.closedPeriods[nome]=state.closedPeriods[nome]||[];
+  if(!state.closedPeriods[nome].includes(k))state.closedPeriods[nome].push(k);
+  state.periodClosedAt=state.periodClosedAt||{};
+  state.periodClosedAt[nome]=state.periodClosedAt[nome]||{};
+  state.periodClosedAt[nome][k]=new Date().toISOString();
+}
+// Reabre um período fechado (Admin, com justificativa) — ver "Reabrir Folha". Não remove nada de
+// closedPeriods (isso não sobreviveria à mesclagem — é só união, nunca esquece); em vez disso grava
+// QUANDO foi reaberto, e isPeriodClosed passa a considerar esse período aberto até um fechamento
+// mais novo que essa reabertura acontecer (fechamento normal, fechamento automático, ou fechar folha
+// de novo).
+function reopenPeriod(nome,pk){
+  state.periodReopenedAt=state.periodReopenedAt||{};
+  state.periodReopenedAt[nome]=state.periodReopenedAt[nome]||{};
+  state.periodReopenedAt[nome][pk]=new Date().toISOString();
+}
 function previousPeriodOpen(){
   if(!(state.role==='colab'&&state.user))return false;
   const prev=previousPeriod();
@@ -2843,7 +2903,10 @@ function colabAcompanhar(){
 }
 function colabPontosAnteriores(){
   const nome=state.user.nome;
-  const chaves=(state.closedPeriods[nome]||[]).slice().sort().reverse();
+  // Só mostra aqui os que ainda estão fechados de fato — um período reaberto pelo Admin some desta
+  // lista (o colaborador volta a poder editar, então ele aparece de novo entre os períodos em
+  // aberto normalmente, não mais aqui).
+  const chaves=(state.closedPeriods[nome]||[]).filter(k=>isPeriodClosed(nome,periodBoundsFromKey(k))).slice().sort().reverse();
   const rows=chaves.length?chaves.map(k=>{
     const b=periodBoundsFromKey(k);
     const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
@@ -4021,7 +4084,8 @@ function adminPayrollPasta(pk){
   }).join('')||`<tr><td colspan="5" style="color:var(--muted)">Nenhum funcionário cadastrado.</td></tr>`;
   return `${head('📁 '+periodLabel(b),`Fechamento de Folha • ${fechs.length} de ${ativos.length} colaborador(es) fecharam este período.`,
     `<button class="btn ghost" onclick="voltarPastasFolha()">‹ Voltar às pastas</button>
-     <button class="btn sm green" onclick="imprimirFolhaDoPeriodo('${pk}')">🖨️ Imprimir ${fechs.length} ponto(s) fechado(s)</button>`)}
+     <button class="btn sm green" onclick="imprimirFolhaDoPeriodo('${pk}')">🖨️ Imprimir ${fechs.length} ponto(s) fechado(s)</button>
+     ${fechs.length?`<button class="btn sm ghost" onclick="reopenFolha('${pk}')">🔓 Reabrir Folha</button>`:''}`)}
   <div class="grid g-4">
     ${kpi('✅','var(--c2)','Fechados',fechs.length,'colaboradores')}
     ${kpi('🕒','var(--c3)','Ainda não fecharam',Math.max(0,ativos.length-fechs.length),'aguardando')}
@@ -4267,7 +4331,7 @@ function imprimirPonto(emp,bounds){
 // Um fechamento por colaborador (sem duplicar) para um período específico.
 function fechadosNoPeriodo(pk){
   const porEmp={};
-  (state.fechamentos||[]).forEach(f=>{if(f.periodKey===pk&&!porEmp[f.emp])porEmp[f.emp]=f;});
+  (state.fechamentos||[]).forEach(f=>{if(f.periodKey===pk&&!f.reopened&&!porEmp[f.emp])porEmp[f.emp]=f;});
   return Object.values(porEmp);
 }
 // Colaboradores que já fecharam o ponto do período que TERMINOU — o mesmo período que "Fechar
@@ -4380,14 +4444,41 @@ function confirmFecharFolha(){
   closeModal();saveNow();render();
   toast('Folha fechada',`Período ${per} encerrado${pendentes.length?` — ${pendentes.length} colaborador(es) atualizados`:''}.`,'ok');
 }
-function reopenFolha(){openModal({content:`<div class="modal-head"><h3>🔓 Reabrir Folha</h3></div>
-  <div class="modal-body"><p style="color:var(--text-2)">A reabertura exige justificativa (registrada em auditoria).</p>
+// Reabre TODOS os colaboradores fechados de um período específico (dentro da pasta de Fechamento
+// de Folha desse período). Fechar só trava o colaborador de bater ponto/editar (o Admin já podia
+// editar o espelho de qualquer jeito — ver comentário em editarEspelho); reabrir desfaz essa trava,
+// devolvendo ao colaborador a capacidade de ajustar o próprio ponto daquele período, com
+// justificativa registrada em auditoria. ANTES este botão nem sequer estava ligado a nenhuma tela
+// (função morta, nunca chamada) e, mesmo chamada, confirmReopen() só registrava um log — não
+// reabria nada de verdade.
+function reopenFolha(pk){
+  const fechs=fechadosNoPeriodo(pk);
+  if(!fechs.length){toast('Nada para reabrir','Nenhum colaborador está fechado neste período.','err');return;}
+  state.reopenPk=pk;
+  openModal({content:`<div class="modal-head"><h3>🔓 Reabrir Folha — ${periodLabel(periodBoundsFromKey(pk))}</h3></div>
+  <div class="modal-body"><p style="color:var(--text-2)">Isso libera novamente o ponto de <b>${fechs.length} colaborador(es)</b> fechado(s) neste período (${fechs.map(f=>f.emp).join(', ')}) para registro/edição. A reabertura exige justificativa (registrada em auditoria).</p>
   <div class="field"><label>Motivo da reabertura *</label><textarea class="input" id="reopenMotivo" placeholder="Ex.: correção retroativa de ponto"></textarea></div></div>
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
-  <button class="btn primary" onclick="confirmReopen()">Reabrir</button></div>`});}
-function confirmReopen(){const m=document.getElementById('reopenMotivo').value;if(!m){toast('Erro','Informe o motivo.','err');return;}
-  state.logs.unshift({quem:'Admin',acao:'Reabriu folha (motivo: '+m+')',alvo:'Período '+periodLabel(previousPeriod()),ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
-  closeModal();render();toast('Folha reaberta','Registrado na auditoria.','info');}
+  <button class="btn primary" onclick="confirmReopen()">Reabrir</button></div>`});
+}
+function confirmReopen(){
+  const m=(document.getElementById('reopenMotivo').value||'').trim();
+  if(!m){toast('Erro','Informe o motivo.','err');return;}
+  const pk=state.reopenPk;
+  const b=periodBoundsFromKey(pk);
+  const fechs=fechadosNoPeriodo(pk);
+  fechs.forEach(f=>{
+    reopenPeriod(f.emp,pk);
+    // Pode haver mais de um "tipo" de fechamento pro mesmo colaborador+período (ex.: fechou manual
+    // e depois o sistema fechou de novo automaticamente) — marca todos como reabertos, senão a tela
+    // de Fechamento de Folha continuaria mostrando "Fechado" por causa do outro registro.
+    state.fechamentos.filter(x=>x.emp===f.emp&&x.periodKey===pk).forEach(x=>{x.reopened=true;x._ts=Date.now();});
+  });
+  state.logs.unshift({quem:'Admin',acao:'Reabriu folha (motivo: '+m+')',alvo:`Período ${periodLabel(b)} • ${fechs.length} colaborador(es): ${fechs.map(f=>f.emp).join(', ')}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  pushNotif({for:'colab',ic:'🔓',c:'var(--c5)',t:'Período reaberto pelo administrador',s:`O período ${periodLabel(b)} foi reaberto para ajustes.`});
+  closeModal();saveNow();render();
+  toast('Folha reaberta',`${periodLabel(b)} • ${fechs.length} colaborador(es) liberado(s) novamente.`,'info');
+}
 
 function adminSchedules(){
   return `${head('Escalas & Jornadas','Configure modelos de jornada e escalas.',

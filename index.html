@@ -1500,20 +1500,28 @@ function loginAsEmployee(emp){
   enterApp();
 }
 // Credenciais do administrador
-// A senha anterior ficava exposta em texto puro no código-fonte público da página (qualquer
-// pessoa podia ver com "Ver código-fonte") e foi trocada por esse motivo em 2026-09-15. Mesmo
-// assim, qualquer senha guardada aqui é visível a quem inspecionar o código — isso é uma
-// limitação do jeito como o login deste app funciona hoje (tudo roda no navegador, sem um
-// servidor por trás validando a senha). Troque essa senha sempre que desconfiar que alguém
-// possa ter tido acesso ao código, e evite reusar uma senha que você usa em outro lugar.
+// A senha não fica mais em texto puro no código-fonte — em vez disso guardamos aqui só o hash
+// SHA-256 dela, e comparamos o hash do que a pessoa digita. Isso impede que alguém simplesmente
+// abra "Ver código-fonte" e leia a senha (o que já aconteceu com a senha anterior, por isso ela
+// foi trocada em 2026-09-15). IMPORTANTE: isso NÃO é segurança de verdade — é só uma cortina a
+// mais. Continua tudo rodando no navegador, sem servidor validando nada; alguém com conhecimento
+// técnico ainda pode abrir o console do navegador e chamar loginAdmin() diretamente, pulando a
+// senha por completo. A única forma de fechar essa porta de vez é mover o login para um backend
+// (Firebase Authentication de verdade + regras de segurança no Firestore). Enquanto isso não
+// acontece, troque esta senha sempre que desconfiar de acesso indevido, e não reuse em outro lugar.
 const ADMIN_USER='admin';
-const ADMIN_PASS='Transauto-rdqSzOIFti!';
-function doLogin(){
+const ADMIN_PASS_HASH='093c0666fe8270b2663b035992a70f2714c2ccc814897054ebc8b2eb06d3dfc1';
+async function sha256Hex(text){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function doLogin(){
   const em=document.getElementById('loginEmail').value.trim();
   const pw=document.getElementById('loginPass').value;
   if(!em||!pw)return toast('Preencha os dados','Informe usuário e senha.','err');
   if(em.toLowerCase()===ADMIN_USER){
-    if(pw!==ADMIN_PASS)return toast('Senha incorreta','Verifique a senha do administrador.','err');
+    const hash=await sha256Hex(pw);
+    if(hash!==ADMIN_PASS_HASH)return toast('Senha incorreta','Verifique a senha do administrador.','err');
     return loginAdmin();
   }
   if(cloudReady&&!sessionReady)return toast('Conectando ao servidor…','Aguarde alguns segundos e tente novamente.','info');

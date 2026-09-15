@@ -625,7 +625,15 @@ function empAvatar(nome){
 
 const state = {
   theme:'light', role:null, user:null, page:'dashboard', collapsed:false,
-  punchesByEmp:{}, // por funcionário -> por data: {entrada,saida}
+  // por funcionário -> por data: {entrada,saida}. NÃO é mais sincronizado com a nuvem (ver
+  // PERSIST_KEYS) nem lido em nenhum lugar — desde que empDayObj()/collectPonto() passaram a usar
+  // só state.registros como fonte única de verdade (comentário perto de empStore), este mirror
+  // ficou write-only, e chegou a divergir de registros com dados reais (mesma batida com horário
+  // diferente nos dois). Continua populado localmente (em memória, por sessão) só porque os pontos
+  // de gravação (registrarPonto/inserirPontoManual/confirmarExcluirRegistro) ainda escrevem nele —
+  // remover essas escritas também é seguro, mas não é necessário: sem sincronizar, ele nunca mais
+  // cresce o documento salvo (era ~192KB, boa fatia do limite de 1MB do Firestore).
+  punchesByEmp:{},
   employees:[],      // cadastrados pelo administrador
   adjustments:[],
   logs:[],
@@ -874,7 +882,8 @@ try{setInterval(flushSupabaseDeleteQueue,60000);}catch(e){}
 try{setInterval(flushSupabaseSnapshot,60000);}catch(e){}
 try{setInterval(reconcileSupabaseRegistros,5*60*1000);}catch(e){}
 
-const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','periodClosedAt','periodReopenedAt','fechamentos','punchesByEmp','config','suporte'];
+// 'punchesByEmp' foi removido desta lista de propósito — ver comentário na definição de state.punchesByEmp.
+const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','periodClosedAt','periodReopenedAt','fechamentos','config','suporte'];
 let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
 
 function stableJSON(src){const o={};PERSIST_KEYS.forEach(k=>o[k]=src?src[k]:undefined);return JSON.stringify(o);}
@@ -892,6 +901,20 @@ function trimGrowth(){
   // deletedKeys só cresce (nunca é reordenado), então manter as últimas 1000 (slice do fim) é
   // seguro — ao contrário de notifications, aqui a ordem de inserção nunca muda.
   if(state.deletedKeys&&state.deletedKeys.length>1000)state.deletedKeys=state.deletedKeys.slice(-1000);
+  // Uma tombstone em deletedKeys só existe pra impedir que um aparelho com cache desatualizado
+  // "ressuscite" um item excluído ao sincronizar de novo. Depois de MERGE_GRACE_MS (7 dias), isso já
+  // não é mais necessário: qualquer aparelho reconectando depois de mais de 7 dias offline já tem
+  // seus itens só-locais descartados por essa mesma janela em mergeByIdLastWriteWins/mergeRegistros
+  // (ver comentário perto de MERGE_GRACE_MS), então a tombstone se torna peso morto no documento.
+  // Corta as mais antigas que a janela pra aliviar o tamanho salvo na nuvem (perto do limite de
+  // 1MB do Firestore) sem abrir brecha pra um item excluído voltar.
+  if(state.deletedKeys&&state.deletedKeys.length){
+    const now=Date.now();
+    state.deletedKeys=state.deletedKeys.filter(d=>{
+      const ts=d&&d.at?new Date(d.at).getTime():0;
+      return !ts||(now-ts)<MERGE_GRACE_MS;
+    });
+  }
 }
 function scheduleSave(){
   if(!sessionReady||applyingRemote)return;
@@ -1135,7 +1158,6 @@ function applyRemote(data){
       const dead=new Set((state.deletedKeys||[]).map(d=>d.k));
       state.registros=mergeRegistros(state.registros,data.registros,dead);
     }
-    else if(k==='punchesByEmp'){state.punchesByEmp=mergePunchesByEmp(state.punchesByEmp,data.punchesByEmp);}
     else if(k==='adjustments'){
       const dead=new Set((state.deletedKeys||[]).map(d=>d.k));
       state.adjustments=mergeByIdLastWriteWinsSorted(state.adjustments,data.adjustments,x=>'id:'+x.id,x=>x._ts||x.id||0).filter(a=>!dead.has('adj:'+a.id));
@@ -1175,6 +1197,12 @@ async function saveToCloudMerged(data){
   const snap=await ref.get();
   const remoto=snap.exists?snap.data():null;
   const merged={...data};
+  // punchesByEmp não faz mais parte do documento (ver comentário na definição de state.punchesByEmp)
+  // — removê-lo aqui também garante que, se o documento remoto AINDA tiver essa chave de uma
+  // gravação antiga, ela não volta: como esta gravação é um ref.set() (substitui o documento
+  // inteiro, não um merge parcial), simplesmente não incluir a chave já basta pra apagá-la de vez
+  // na próxima gravação bem-sucedida — sem precisar de nenhuma migração/limpeza separada.
+  delete merged.punchesByEmp;
   if(remoto){
     merged.deletedKeys=mergeUnionByKey(data.deletedKeys,remoto.deletedKeys,d=>d.k);
     const dead=new Set((merged.deletedKeys||[]).map(d=>d.k));
@@ -1184,7 +1212,6 @@ async function saveToCloudMerged(data){
     merged.vacations=mergeByIdLastWriteWinsSorted(data.vacations,remoto.vacations,x=>'id:'+x.id,x=>x._ts||x.id||0);
     merged.suporte=mergeByIdLastWriteWinsSorted(data.suporte,remoto.suporte,x=>'id:'+x.id,x=>x._ts||x.id||0);
     merged.fechamentos=mergeByIdLastWriteWins(data.fechamentos,remoto.fechamentos,x=>[x.emp,x.periodKey,x.tipo].join('|'),x=>x._ts||0);
-    merged.punchesByEmp=mergePunchesByEmp(data.punchesByEmp,remoto.punchesByEmp);
     merged.closedPeriods=mergeClosedPeriods(data.closedPeriods,remoto.closedPeriods);
     merged.periodClosedAt=mergeTimestampMap(data.periodClosedAt,remoto.periodClosedAt);
     merged.periodReopenedAt=mergeTimestampMap(data.periodReopenedAt,remoto.periodReopenedAt);
@@ -1228,7 +1255,7 @@ async function saveToCloudMerged(data){
   if(!applyingRemote){
     state.registros=merged.registros; state.adjustments=merged.adjustments; state.notifications=merged.notifications;
     state.vacations=merged.vacations; state.deletedKeys=merged.deletedKeys;
-    state.fechamentos=merged.fechamentos; state.punchesByEmp=merged.punchesByEmp; state.closedPeriods=merged.closedPeriods;
+    state.fechamentos=merged.fechamentos; state.closedPeriods=merged.closedPeriods;
     state.periodClosedAt=merged.periodClosedAt; state.periodReopenedAt=merged.periodReopenedAt;
     state.holidays=merged.holidays; state.escalas=merged.escalas; state.logs=merged.logs;
     state.employees=merged.employees; state.afastamentos=merged.afastamentos;

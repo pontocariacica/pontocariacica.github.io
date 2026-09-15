@@ -3532,6 +3532,16 @@ function inserirPontoManual(emp,data,tipo,hora,obs){
   // colaborador — sem isso, só entrava na cópia completa (pontoapp_snapshot), não na tabela
   // linha-a-linha (registros_ponto).
   sendRegistroToSupabase(r);
+  // Mesma regra do fechamento automático na batida real (registrarPonto): se o admin está
+  // lançando/editando a SAÍDA de HOJE e hoje é o último dia do período, fecha o período agora.
+  // Sem isso, um colaborador cujo ponto de hoje foi todo aberto/ajustado manualmente (em vez de
+  // batido ao vivo) ficava com o selo "Jornada encerrada" (que só olha entrada+saída do dia) mas
+  // o período nunca era realmente fechado — foi exatamente o caso do Douglas e do Angelo.
+  let fechouAgora=false;
+  if(tipo==='Saída'&&data===todayKey()){
+    fechouAgora=fecharPeriodoAtualSeUltimoDia(emp.nome);
+  }
+  return fechouAgora;
 }
 function lancarPontoManual(){
   const gv=x=>{const el=document.getElementById(x);return el?el.value:'';};
@@ -3549,12 +3559,16 @@ function lancarPontoManual(){
   if(modo==='saida'||modo==='ambos'){if(!hSai){toast('Informe o horário de saída','Preencha o horário de saída.','err');return;}lancar.push(['Saída',hSai]);}
   if(!lancar.length){toast('Nada para lançar','Escolha o que deseja lançar.','err');return;}
   if(modo==='ambos'&&hSai<=hEnt){toast('Horários inválidos','A saída precisa ser depois da entrada.','err');return;}
-  lancar.forEach(([tipo,hora])=>inserirPontoManual(emp,data,tipo,hora,obs));
+  const fechouPeriodo=lancar.map(([tipo,hora])=>inserirPontoManual(emp,data,tipo,hora,obs)).some(Boolean);
   const resumo=lancar.map(([t,h])=>`${t} ${h}`).join(' • ');
   pushNotif({for:'colab',ic:'➕',c:'var(--c2)',t:'Ponto lançado pelo administrador',s:`${emp.nome} • ${fmtd(data)} • ${resumo}`});
   state.logs.unshift({quem:'Admin',acao:'Abriu ponto manual',alvo:`${emp.nome} • ${fmtd(data)} • ${resumo}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   saveNow();render();
-  toast('Ponto lançado',`${emp.nome} • ${fmtd(data)} • ${resumo}.`,'ok');
+  if(fechouPeriodo){
+    toast('Ponto lançado e período fechado',`${emp.nome} • ${fmtd(data)} • ${resumo}. Hoje é o último dia do período (${periodLabel(currentPeriod())}) e o período foi encerrado automaticamente.`,'ok');
+  }else{
+    toast('Ponto lançado',`${emp.nome} • ${fmtd(data)} • ${resumo}.`,'ok');
+  }
 }
 function setRegView(v){state.regView=v;if(v==='acompanhar'){state.acompEmp=null;state.acompRef=null;}render();}
 // Sempre que troca de colaborador (ou volta e escolhe outro), reinicia no período atual —
@@ -4081,13 +4095,18 @@ function salvarEdicaoEspelhoDia(empName,data,pk){
   const entEl=document.getElementById('eeEnt_'+data),saiEl=document.getElementById('eeSai_'+data);
   const ent=entEl?entEl.value:'',sai=saiEl?saiEl.value:'';
   if(!ent&&!sai){toast('Nada para salvar','Informe ao menos um horário.','err');return;}
-  if(ent)inserirPontoManual(emp,data,'Entrada',ent,'Editado no Fechamento de Folha');
-  if(sai)inserirPontoManual(emp,data,'Saída',sai,'Editado no Fechamento de Folha');
+  let fechouPeriodo=false;
+  if(ent)fechouPeriodo=inserirPontoManual(emp,data,'Entrada',ent,'Editado no Fechamento de Folha')||fechouPeriodo;
+  if(sai)fechouPeriodo=inserirPontoManual(emp,data,'Saída',sai,'Editado no Fechamento de Folha')||fechouPeriodo;
   pushNotif({for:'colab',ic:'✏️',c:'var(--c2)',t:'Ponto ajustado pelo administrador',s:`${empName} • ${fmtd(data)}`});
   state.logs.unshift({quem:'Admin',acao:'Editou espelho de ponto',alvo:`${empName} • ${fmtd(data)}`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   saveNow();
   editarEspelho(empName,pk); // reabre o modal já atualizado com o novo valor
-  toast('Espelho atualizado',`${empName} • ${fmtd(data)}`,'ok');
+  if(fechouPeriodo){
+    toast('Espelho atualizado e período fechado',`${empName} • ${fmtd(data)}. Hoje é o último dia do período (${periodLabel(currentPeriod())}) e o período foi encerrado automaticamente.`,'ok');
+  }else{
+    toast('Espelho atualizado',`${empName} • ${fmtd(data)}`,'ok');
+  }
 }
 // ===== Impressão de espelhos =====
 // Monta os dias reais do período a partir dos registros, com contagem de jantas.

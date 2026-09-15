@@ -551,8 +551,13 @@ body{ zoom: var(--ui-scale); }
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="side-brand">
-        <div class="logo-emblem"><svg width="24" height="24" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-          <text x="15" y="22" font-family="Arial Black,sans-serif" font-weight="900" font-style="italic" font-size="22" fill="#fff" text-anchor="middle">t</text>
+        <div class="logo-emblem"><svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="relógio">
+          <circle cx="50" cy="52" r="38" fill="none" stroke="#fff" stroke-width="7"/>
+          <circle cx="50" cy="18" r="3.2" fill="#fff"/>
+          <path d="M42 10 L58 10" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+          <path d="M50 52 L50 30" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/>
+          <path d="M50 52 L68 42" stroke="#f5b400" stroke-width="6.5" stroke-linecap="round"/>
+          <circle cx="50" cy="52" r="4.5" fill="#f5b400"/>
         </svg></div>
         <span><svg class="tlogo" viewBox="0 0 470 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="transauto">
           <text x="20" y="94" font-family="'Arial Black','Arial Narrow',Arial,system-ui,sans-serif" font-weight="900" font-style="italic" font-size="90" letter-spacing="-5" fill="var(--logo-ink)" textLength="430" lengthAdjust="spacingAndGlyphs">transauto</text>
@@ -568,7 +573,14 @@ body{ zoom: var(--ui-scale); }
       <header class="topbar">
         <button class="icon-btn menu-toggle" onclick="toggleMobileNav()">☰</button>
         <button class="icon-btn" onclick="toggleSidebar()" title="Recolher menu">⇔</button>
-        <div class="mobile-brand"><span class="mb-emblem">t</span><b>transauto</b></div>
+        <div class="mobile-brand"><span class="mb-emblem"><svg width="16" height="16" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="relógio">
+          <circle cx="50" cy="52" r="38" fill="none" stroke="#fff" stroke-width="8"/>
+          <circle cx="50" cy="18" r="3.6" fill="#fff"/>
+          <path d="M42 10 L58 10" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+          <path d="M50 52 L50 28" stroke="#fff" stroke-width="7.5" stroke-linecap="round"/>
+          <path d="M50 52 L70 40" stroke="#f5b400" stroke-width="7.5" stroke-linecap="round"/>
+          <circle cx="50" cy="52" r="5" fill="#f5b400"/>
+        </svg></span><b>transauto</b></div>
         <div class="searchbar">🔎<input placeholder="Buscar colaboradores…" id="globalSearch" oninput="onSearch(this.value)"></div>
         <div class="topbar-right">
           <div class="clock" id="topClock"><small id="topDate">—</small><span id="topTime">--:--:--</span></div>

@@ -1816,6 +1816,20 @@ function autoFecharPeriodoAnterior(){
   registrarFechamento(nome,prev,'Fechado automaticamente pelo sistema');
   saveNow();
 }
+// Pedido do administrador: no ÚLTIMO dia do período atual (dia 15), quando o colaborador bater a
+// Saída, o próprio ponto do período já fecha na hora — sem esperar o colaborador abrir o app de
+// novo depois (isso é o que autoFecharPeriodoAnterior acima já cobre, mas só a partir do PRÓXIMO
+// período). Chamada só quando a batida é a Saída (ver registrarPonto). Retorna true quando fechou
+// agora mesmo (pra registrarPonto poder trocar a mensagem de sucesso avisando o colaborador).
+function fecharPeriodoAtualSeUltimoDia(nome){
+  const cur=currentPeriod();
+  if(todayKey()!==dateKey(cur.end))return false; // hoje não é o último dia (dia 15) do período
+  if(isPeriodClosed(nome,cur))return false; // já tinha sido fechado (ex.: duas abas, ou fechado pelo Admin)
+  closePeriod(nome,cur);
+  state.logs.unshift({quem:'Sistema',acao:'Fechou o período automaticamente (última saída do dia 15)',alvo:nome+' • '+periodLabel(cur),ip:'—',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  registrarFechamento(nome,cur,'Fechado automaticamente pelo sistema (última saída do período)');
+  return true;
+}
 // Antes mostrava um aviso pedindo pro colaborador clicar em "Fechar agora"; agora o fechamento é
 // automático (autoFecharPeriodoAnterior) — se por algum motivo esta função ainda for chamada com
 // o período em aberto (ex.: o app ficou aberto atravessando a virada do período sem recarregar),
@@ -2074,7 +2088,15 @@ async function registrarPonto(btn,force){
     // A última batida programada do dia (Saída) encerra a jornada — merece uma celebração um
     // pouco diferente da de cada batida normal, sem inventar nenhum dado novo.
     const jornadaConcluida = next==='saida';
-    showSuccess(SCHED_LABEL[next]+' registrada!',(janta?'🍽️ Janta registrada • ':'')+`${time} • ${geo.cidade}/${geo.estado}`,jornadaConcluida);
+    // No último dia do período (dia 15), a Saída também fecha o ponto do período na hora — ver
+    // fecharPeriodoAtualSeUltimoDia. Quando isso acontece, a mensagem de sucesso avisa o
+    // colaborador do fechamento em vez de mostrar só a saída normal.
+    const periodoFechadoAgora = jornadaConcluida && fecharPeriodoAtualSeUltimoDia(state.user.nome);
+    if(periodoFechadoAgora){
+      showSuccess('🔒 Ponto fechado automaticamente!',`Saída ${time} registrada • seu período (${periodLabel(currentPeriod())}) foi encerrado.`,true);
+    }else{
+      showSuccess(SCHED_LABEL[next]+' registrada!',(janta?'🍽️ Janta registrada • ':'')+`${time} • ${geo.cidade}/${geo.estado}`,jornadaConcluida);
+    }
     // Grava imediatamente (não espera o debounce) para reduzir ao mínimo a chance de o
     // registro ser perdido caso outro aparelho sincronize dados quase ao mesmo tempo.
     saveNow();render();

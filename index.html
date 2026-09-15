@@ -1082,6 +1082,21 @@ function mergeUnionByKey(local,remote,keyFn){
   local.forEach(x=>{const k=keyFn(x);if(!out[k])out[k]=x;});
   return Object.values(out);
 }
+// deletedKeys é uma união (mergeUnionByKey) igual a logs — nenhum dos dois lados nunca "esquece" um
+// item do outro. Só que, ao contrário de logs, aqui isso é um problema: um corte local (trimGrowth,
+// que descarta tombstones mais velhas que a janela de proteção MERGE_GRACE_MS) NÃO sobrevive a uma
+// união com o remoto, porque o remoto ainda tem a entrada antiga — a próxima mesclagem simplesmente
+// a traz de volta (a mesma classe de bug já vista com closedPeriods/holidays). Por isso o corte por
+// idade precisa acontecer AQUI, depois da união, e não só em trimGrowth (que continua útil como
+// limite de segurança por contagem, caso a data de alguma entrada esteja corrompida/ausente).
+function mergeDeletedKeys(local,remote){
+  const unioned=mergeUnionByKey(local,remote,d=>d.k);
+  const now=Date.now();
+  return unioned.filter(d=>{
+    const ts=d&&d.at?new Date(d.at).getTime():0;
+    return !ts||(now-ts)<MERGE_GRACE_MS;
+  });
+}
 // Feriados: une pela data (chave natural). O campo "liberado" é uma decisão explícita do Admin
 // (botão Liberar/Bloquear na tela Feriados) e precisa "pegar" nos dois sentidos — ANTES, a
 // mesclagem fazia só um OR entre os dois lados (ex.liberado||h.liberado): uma vez que qualquer
@@ -1153,7 +1168,7 @@ function applyRemote(data){
   applyingRemote=true;
   PERSIST_KEYS.forEach(k=>{
     if(data[k]===undefined)return;
-    if(k==='deletedKeys'){state.deletedKeys=mergeUnionByKey(state.deletedKeys,data.deletedKeys,d=>d.k);}
+    if(k==='deletedKeys'){state.deletedKeys=mergeDeletedKeys(state.deletedKeys,data.deletedKeys);}
     else if(k==='registros'){
       const dead=new Set((state.deletedKeys||[]).map(d=>d.k));
       state.registros=mergeRegistros(state.registros,data.registros,dead);
@@ -1204,7 +1219,7 @@ async function saveToCloudMerged(data){
   // na próxima gravação bem-sucedida — sem precisar de nenhuma migração/limpeza separada.
   delete merged.punchesByEmp;
   if(remoto){
-    merged.deletedKeys=mergeUnionByKey(data.deletedKeys,remoto.deletedKeys,d=>d.k);
+    merged.deletedKeys=mergeDeletedKeys(data.deletedKeys,remoto.deletedKeys);
     const dead=new Set((merged.deletedKeys||[]).map(d=>d.k));
     merged.registros=mergeRegistros(data.registros,remoto.registros,dead);
     merged.adjustments=mergeByIdLastWriteWinsSorted(data.adjustments,remoto.adjustments,x=>'id:'+x.id,x=>x._ts||x.id||0).filter(a=>!dead.has('adj:'+a.id));

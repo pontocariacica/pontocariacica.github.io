@@ -1,6 +1,7 @@
 // Service worker — PontoPro transauto
-const CACHE = 'pontopro-v2'; // versão nova força a limpeza do cache antigo (ver activate abaixo)
-const ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'pontopro-v3'; // versão nova força a limpeza do cache antigo (ver activate abaixo) —
+// subida pra v3 junto com a troca do ícone (t → relógio), pra garantir que o app baixe os PNGs novos.
+const ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/maskable-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{}));
   self.skipWaiting();

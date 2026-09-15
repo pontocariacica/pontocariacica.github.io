@@ -1066,6 +1066,31 @@ function mergeHolidays(local,remote){
 }
 // Escalas só são criadas, nunca editadas — uma união simples pelo nome já resolve.
 function mergeEscalas(local,remote){return mergeUnionByKey(local,remote,e=>e.nome);}
+// Funcionários: tinham a MESMA classe de bug que "registros" já teve — 'employees' não estava na
+// lista de mesclagem (nem aqui em applyRemote, nem em saveToCloudMerged mais abaixo), então um
+// snapshot do servidor simplesmente SUBSTITUÍA a lista local inteira, e uma gravação local
+// SUBSTITUÍA a lista inteira no servidor. Bug real relatado em produção: "não consigo cadastrar
+// um novo funcionário" — o cadastro aparecia por um instante (o toast de sucesso chegava a
+// aparecer) e sumia sozinho, porque bastava OUTRA aba/aparelho aberto (com a lista de
+// funcionários mais antiga, sem o novo cadastro) salvar por conta própria — o que acontece
+// sozinho a cada poucos segundos via scheduleSave()/tick() — para o novo funcionário ser
+// apagado do servidor por cima. Agora mescla por "id" (último que editou vence, como já
+// acontece com adjustments/vacations/suporte), usando "_ts" para saber qual lado é mais recente.
+function mergeEmployees(local,remote,deadSet){
+  let merged=mergeByIdLastWriteWins(local,remote,x=>'id:'+x.id,x=>x._ts||x.id||0);
+  if(deadSet&&deadSet.size)merged=merged.filter(e=>!deadSet.has('emp:'+e.id));
+  return merged;
+}
+// Afastamentos/atestados: mesmo problema do mergeEmployees acima. Registros antigos não têm "id"
+// (foram criados antes desta correção), então a chave de mesclagem cai para uma combinação estável
+// de campos (colaborador+tipo+início+fim) nesses casos — igual ao esquema já usado em regKey/
+// regMergeKey para registros de ponto legados.
+function afastMergeKey(a){return a&&(a.id!=null?('id:'+a.id):[a.emp,a.tipo,a.ini,a.fim].join('|'));}
+function mergeAfastamentos(local,remote,deadSet){
+  let merged=mergeByIdLastWriteWins(local,remote,afastMergeKey,x=>x._ts||0);
+  if(deadSet&&deadSet.size)merged=merged.filter(a=>!deadSet.has('afast:'+afastMergeKey(a)));
+  return merged;
+}
 // Logs de auditoria: "nada é apagado" (é a própria promessa da tela) — por isso é sempre união,
 // nunca last-write-wins, ordenada do mais recente pro mais antigo.
 function mergeLogs(local,remote){
@@ -1095,6 +1120,14 @@ function applyRemote(data){
     else if(k==='holidays'){state.holidays=mergeHolidays(state.holidays,data.holidays);}
     else if(k==='escalas'){state.escalas=mergeEscalas(state.escalas,data.escalas);}
     else if(k==='logs'){state.logs=mergeLogs(state.logs,data.logs);}
+    else if(k==='employees'){
+      const dead=new Set((state.deletedKeys||[]).map(d=>d.k));
+      state.employees=mergeEmployees(state.employees,data.employees,dead);
+    }
+    else if(k==='afastamentos'){
+      const dead=new Set((state.deletedKeys||[]).map(d=>d.k));
+      state.afastamentos=mergeAfastamentos(state.afastamentos,data.afastamentos,dead);
+    }
     else{state[k]=data[k];}
   });
   applyingRemote=false;
@@ -1126,6 +1159,8 @@ async function saveToCloudMerged(data){
     merged.holidays=mergeHolidays(data.holidays,remoto.holidays);
     merged.escalas=mergeEscalas(data.escalas,remoto.escalas);
     merged.logs=mergeLogs(data.logs,remoto.logs);
+    merged.employees=mergeEmployees(data.employees,remoto.employees,dead);
+    merged.afastamentos=mergeAfastamentos(data.afastamentos,remoto.afastamentos,dead);
   }
   const suspect=suspiciousShrink(merged,remoto);
   if(suspect){
@@ -1163,6 +1198,7 @@ async function saveToCloudMerged(data){
     state.vacations=merged.vacations; state.deletedKeys=merged.deletedKeys;
     state.fechamentos=merged.fechamentos; state.punchesByEmp=merged.punchesByEmp; state.closedPeriods=merged.closedPeriods;
     state.holidays=merged.holidays; state.escalas=merged.escalas; state.logs=merged.logs;
+    state.employees=merged.employees; state.afastamentos=merged.afastamentos;
     // 'suporte' também passa por mesclagem (linha acima, mergeByIdLastWriteWinsSorted) mas ficou de
     // fora desta lista por engano — sem isso, se o servidor já tinha uma mensagem que este aparelho
     // ainda não conhecia (ex.: colaborador e Admin escrevendo quase ao mesmo tempo), o "state.suporte"
@@ -3225,8 +3261,17 @@ function adminEmployees(){
     <tbody>${rows}</tbody></table></div></div>`;
 }
 function statusBadge(s){const m={ativo:['b-good','Ativo'],ferias:['b-info','Férias'],atestado:['b-warn','Atestado'],inativo:['b-mut','Inativo']};return `<span class="badge ${m[s][0]}">${m[s][1]}</span>`;}
-function toggleStatus(id){const e=state.employees.find(x=>x.id===id);e.status=e.status==='inativo'?'ativo':'inativo';render();toast('Status alterado',`${e.nome}: ${e.status}`,'info');}
-function delEmployee(id){const e=state.employees.find(x=>x.id===id);state.employees=state.employees.filter(x=>x.id!==id);render();toast('Removido',e.nome+' foi excluído.','err');}
+function toggleStatus(id){const e=state.employees.find(x=>x.id===id);e.status=e.status==='inativo'?'ativo':'inativo';e._ts=Date.now();render();toast('Status alterado',`${e.nome}: ${e.status}`,'info');}
+function delEmployee(id){
+  const e=state.employees.find(x=>x.id===id);
+  state.employees=state.employees.filter(x=>x.id!==id);
+  // Registra a exclusão em deletedKeys (mesmo mecanismo usado para registros/ajustes) — sem isso,
+  // a mesclagem (que só sabe adicionar/atualizar por id, nunca remover) trazia o funcionário
+  // excluído de volta assim que qualquer aparelho ainda com ele em cache sincronizasse de novo.
+  if(!state.deletedKeys)state.deletedKeys=[];
+  state.deletedKeys.push({k:'emp:'+id,at:new Date().toISOString()});
+  render();toast('Removido',e.nome+' foi excluído.','err');
+}
 const SETORES=['Administrativo','Operacional','Logística','Financeiro','Comercial','Recursos Humanos','Manutenção','Frota','TI'];
 const FUNCOES=['Analista','Auxiliar Administrativo','Assistente','Conferente','Encarregado','Supervisor','Coordenador','Gerente','Motorista','Operador','Estagiário'];
 function selOptions(list,current){
@@ -3305,12 +3350,12 @@ function saveEmployee(id){
   if(dup||data.email.toLowerCase()===ADMIN_USER){toast('Login em uso','Este login não está disponível (reservado ou já usado).','err');return;}
   if(id){
     const e=state.employees.find(x=>x.id===id);
-    Object.assign(e,data,{login:data.email,senha});
+    Object.assign(e,data,{login:data.email,senha,_ts:Date.now()});
     state.logs.unshift({quem:'Admin',acao:'Editou funcionário / usuário',alvo:e.nome,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
     closeModal();render();toast('Salvo',e.nome+' foi atualizado.','info');
   }else{
     const ini=data.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    const emp={id:Date.now(),banco:'+00:00',av:AV('#1f3a68',ini),login:data.email,senha,
+    const emp={id:Date.now(),_ts:Date.now(),banco:'+00:00',av:AV('#1f3a68',ini),login:data.email,senha,
       matricula:'FN-'+String(state.employees.length+1).padStart(5,'0'),
       admissao:new Date().toLocaleDateString('pt-BR'),...data};
     state.employees.push(emp);
@@ -4431,7 +4476,7 @@ function saveAtestado(){
   const dias=+document.getElementById('atDias').value||1,cid=document.getElementById('atCid').value,med=document.getElementById('atMed').value;
   if(!ini){toast('Erro','Informe a data de início.','err');return;}
   const fim=new Date(new Date(ini+'T00:00:00').getTime()+(dias-1)*86400000).toISOString().slice(0,10);
-  state.afastamentos.unshift({tipo:'🩺 Atestado',emp,ini,fim,dias,det:`${cid?'CID '+cid+' • ':''}${med||'—'}`,status:'homologado',badge:'b-info'});
+  state.afastamentos.unshift({id:newId(),_ts:Date.now(),tipo:'🩺 Atestado',emp,ini,fim,dias,det:`${cid?'CID '+cid+' • ':''}${med||'—'}`,status:'homologado',badge:'b-info'});
   state.logs.unshift({quem:'Admin',acao:'Cadastrou atestado',alvo:`${emp} • ${dias} dia(s)`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   closeModal();render();toast('Atestado cadastrado',emp+' • '+dias+' dia(s).','info');
 }

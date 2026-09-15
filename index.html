@@ -1500,8 +1500,14 @@ function loginAsEmployee(emp){
   enterApp();
 }
 // Credenciais do administrador
+// A senha anterior ficava exposta em texto puro no código-fonte público da página (qualquer
+// pessoa podia ver com "Ver código-fonte") e foi trocada por esse motivo em 2026-09-15. Mesmo
+// assim, qualquer senha guardada aqui é visível a quem inspecionar o código — isso é uma
+// limitação do jeito como o login deste app funciona hoje (tudo roda no navegador, sem um
+// servidor por trás validando a senha). Troque essa senha sempre que desconfiar que alguém
+// possa ter tido acesso ao código, e evite reusar uma senha que você usa em outro lugar.
 const ADMIN_USER='admin';
-const ADMIN_PASS='Ts-Sala8';
+const ADMIN_PASS='Transauto-rdqSzOIFti!';
 function doLogin(){
   const em=document.getElementById('loginEmail').value.trim();
   const pw=document.getElementById('loginPass').value;
@@ -2420,8 +2426,8 @@ function colabPunch(){
       ${g?`<div style="margin-top:12px;font-size:13.5px;line-height:1.9">
         <div><a href="https://www.google.com/maps?q=${g.latitude},${g.longitude}" target="_blank" rel="noopener">🌐 Abrir local no Google Maps</a></div>
         <div><b>Tipo:</b> ${g.tipo} • ${g.time}</div>
-        <div><b>Endereço:</b> ${g.addr}</div>
-        <div><b>Cidade/UF:</b> ${g.cidade} / ${g.estado}</div>
+        <div><b>Endereço:</b> ${escapeHtml(g.addr)}</div>
+        <div><b>Cidade/UF:</b> ${escapeHtml(g.cidade)} / ${escapeHtml(g.estado)}</div>
         <div><b>Coordenadas:</b> ${g.latitude.toFixed(5)}, ${g.longitude.toFixed(5)} <span class="badge b-info">±${g.accuracy}m</span></div>
         <div><b>Dispositivo:</b> ${g.dev} • ${g.os} • ${g.br}</div>
       </div>`:`<div style="margin-top:12px;color:var(--muted);font-size:13.5px">Nenhum registro nesta sessão. Ao registrar o ponto, capturamos latitude, longitude, endereço, precisão do GPS, IP e dados do dispositivo.</div>`}
@@ -2516,9 +2522,9 @@ function confirmFecharMeuPonto(){
 }
 function colabAdjust(){
   const mine=state.adjustments.filter(a=>a.emp===state.user.nome);
-  const rows=mine.map(a=>`<tr data-ajuste-row="${a.id}"><td>${fmtd(a.data)}</td><td>${a.tipo}</td><td><b>${a.para}</b></td><td>${a.motivo}</td>
+  const rows=mine.map(a=>`<tr data-ajuste-row="${a.id}"><td>${fmtd(a.data)}</td><td>${a.tipo}</td><td><b>${a.para}</b></td><td>${escapeHtml(a.motivo)}</td>
     <td><span class="badge ${ajusteBadge(a.status)}">${a.status}</span>
-      ${a.status==='recusado'&&a.motivoReprovacao?`<br><small style="color:var(--s-crit)">${a.motivoReprovacao}</small>`:''}</td>
+      ${a.status==='recusado'&&a.motivoReprovacao?`<br><small style="color:var(--s-crit)">${escapeHtml(a.motivoReprovacao)}</small>`:''}</td>
     <td style="white-space:nowrap">${a.status==='pendente'
       ? `<button class="btn sm ghost" onclick="openAdjustForm(${a.id})" title="Editar solicitação">✏️ Editar</button>
          <button class="btn sm danger" onclick="cancelAdjust(${a.id})" title="Cancelar solicitação">🗑️</button>`
@@ -2548,7 +2554,7 @@ function openAdjustForm(id){
       <div class="field"><label>Motivo</label><select class="input" id="adjMotivo">
         ${['Esquecimento','Falha no sistema','Problema de GPS','Outro'].map(o=>`<option ${a&&a.motivo===o?'selected':''}>${o}</option>`).join('')}</select></div>
     </div>
-    <div class="field"><label>Observação</label><textarea class="input" id="adjObs" placeholder="Descreva o ocorrido…">${obs}</textarea></div>
+    <div class="field"><label>Observação</label><textarea class="input" id="adjObs" placeholder="Descreva o ocorrido…">${escapeHtml(obs)}</textarea></div>
     <div class="field"><label>Anexo (opcional)</label><input class="input" type="file"></div>
   </div>
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
@@ -3331,7 +3337,7 @@ function adminManualPunch(){
   const manuais=state.registros.filter(r=>r.manual).slice(0,10);
   const manRows=manuais.length
     ? manuais.map(r=>`<tr>
-        <td><b>${r.emp}</b></td>
+        <td><b>${escapeHtml(r.emp)}</b></td>
         <td>${fmtd(r.data)}</td>
         <td><span class="badge ${r.tipo==='Entrada'?'b-good':'b-info'}">${r.tipo}</span></td>
         <td><b>${r.hora}</b></td></tr>`).join('')
@@ -3475,12 +3481,12 @@ function adminRegLista(){
   const precMedia=comGeo.length?Math.round(comGeo.reduce((s,r)=>s+r.prec,0)/comGeo.length):0;
   const cidades=new Set(comGeo.map(r=>r.cidade)).size;
   const rows=list.map(r=>{const i=state.registros.indexOf(r);return `<tr>
-    <td><div class="uname"><img class="tavatar" src="${empAvatar(r.emp)}"><div><b>${r.emp}</b><small>${r.disp}</small></div></div></td>
-    <td>${fmtd(r.data)} · <b>${r.hora}</b>${r.ajustado?` <span class="badge b-info" style="font-size:10px;padding:2px 6px" title="Horário original: ${r.horaOriginal||'—'}">ajustado</span>`:''}</td>
+    <td><div class="uname"><img class="tavatar" src="${empAvatar(r.emp)}"><div><b>${escapeHtml(r.emp)}</b><small>${escapeHtml(r.disp)}</small></div></div></td>
+    <td>${fmtd(r.data)} · <b>${r.hora}</b>${r.ajustado?` <span class="badge b-info" style="font-size:10px;padding:2px 6px" title="Horário original: ${escapeHtml(r.horaOriginal||'—')}">ajustado</span>`:''}</td>
     <td><span class="badge ${r.tipo==='Entrada'?'b-good':'b-info'}">${r.tipo}</span></td>
-    <td>📍 <b>${r.cidade}/${r.estado}</b><br><small style="color:var(--muted)">${r.addr}</small></td>
+    <td>📍 <b>${escapeHtml(r.cidade)}/${escapeHtml(r.estado)}</b><br><small style="color:var(--muted)">${escapeHtml(r.addr)}</small></td>
     <td><span class="badge b-info">±${r.prec}m</span></td>
-    <td><code style="font-size:12px">${r.ip}</code></td>
+    <td><code style="font-size:12px">${escapeHtml(r.ip)}</code></td>
     <td style="white-space:nowrap">
       <button class="btn sm ghost" onclick="verPonto('${r.emp.replace(/'/g,"")}')" title="Ver ponto do colaborador">👁️ Ponto</button>
       <button class="btn sm primary" onclick="verMapa(${i})">🗺️ Mapa</button>
@@ -3577,7 +3583,7 @@ function excluirRegistro(i){
   <div class="modal-body">
     <p style="color:var(--text-2);font-size:14px;line-height:1.7">Tem certeza que deseja excluir este registro?</p>
     <div class="card" style="background:var(--surface-2);box-shadow:none"><div class="mini-list">
-      ${infoLine('👤','Colaborador',r.emp)}
+      ${infoLine('👤','Colaborador',escapeHtml(r.emp))}
       ${infoLine('📅','Data',fmtd(r.data)+' • '+diaSemanaExt(r.data))}
       ${infoLine('⏱️','Registro',r.tipo+' às '+r.hora)}
     </div></div>
@@ -3646,14 +3652,14 @@ function verMapa(i){
   <div class="modal-body">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
       <img class="tavatar" src="${empAvatar(r.emp)}" style="width:40px;height:40px">
-      <div><b>${r.emp}</b><br><small style="color:var(--muted)">${r.tipo} • ${fmtd(r.data)} às ${r.hora} • ${r.disp}</small></div>
+      <div><b>${escapeHtml(r.emp)}</b><br><small style="color:var(--muted)">${r.tipo} • ${fmtd(r.data)} às ${r.hora} • ${escapeHtml(r.disp)}</small></div>
     </div>
     ${mapEmbed(r.lat,r.lon,300)}
     <div style="margin-top:14px;font-size:13.5px;line-height:1.9">
-      <div><b>Endereço:</b> ${r.addr}</div>
-      <div><b>Cidade/UF:</b> ${r.cidade} / ${r.estado}</div>
+      <div><b>Endereço:</b> ${escapeHtml(r.addr)}</div>
+      <div><b>Cidade/UF:</b> ${escapeHtml(r.cidade)} / ${escapeHtml(r.estado)}</div>
       <div><b>Coordenadas:</b> ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)} <span class="badge b-info">±${r.prec}m de precisão</span></div>
-      <div><b>IP:</b> <code>${r.ip}</code></div>
+      <div><b>IP:</b> <code>${escapeHtml(r.ip)}</code></div>
     </div>
     <a class="btn ghost" href="https://www.google.com/maps?q=${r.lat},${r.lon}" target="_blank" rel="noopener" style="margin-top:14px;text-decoration:none">🌐 Abrir no Google Maps</a>
   </div>
@@ -3662,13 +3668,13 @@ function verMapa(i){
 function ajusteBadge(s){return s==='pendente'?'b-warn':(s==='aprovado'||s==='realizado')?'b-good':s==='recusado'?'b-crit':'b-mut';}
 function adminAdjustments(){
   const rows=state.adjustments.map(a=>`<tr data-ajuste-row="${a.id}">
-    <td><b>${a.emp}</b></td><td>${fmtd(a.data)}</td><td>${a.tipo}</td>
+    <td><b>${escapeHtml(a.emp)}</b></td><td>${fmtd(a.data)}</td><td>${a.tipo}</td>
     <td>${a.de&&a.de!=='—'?a.de:'<span style="color:var(--muted)">sem batida</span>'} → <b>${a.para}</b></td>
-    <td>${a.motivo}<br><small style="color:var(--muted)">${a.obs||''}</small></td>
+    <td>${escapeHtml(a.motivo)}<br><small style="color:var(--muted)">${escapeHtml(a.obs||'')}</small></td>
     <td><small style="color:var(--muted)">${a._ts?new Date(a._ts).toLocaleString('pt-BR'):'—'}</small></td>
     <td><span class="badge ${ajusteBadge(a.status)}">${a.status}</span>
       ${a.realizadoEm?`<br><small style="color:var(--muted)">em ${a.realizadoEm}</small>`:''}
-      ${a.status==='recusado'&&a.motivoReprovacao?`<br><small style="color:var(--s-crit)">Motivo: ${a.motivoReprovacao}</small>`:''}</td>
+      ${a.status==='recusado'&&a.motivoReprovacao?`<br><small style="color:var(--s-crit)">Motivo: ${escapeHtml(a.motivoReprovacao)}</small>`:''}</td>
     <td style="white-space:nowrap">${a.status==='pendente'?
       `<button class="btn sm ghost" onclick="openAjusteEdit(${a.id})">✏️ Editar</button>
        <button class="btn sm green" onclick="aprovarAjuste(${a.id})">✓ Aprovar</button>
@@ -3681,12 +3687,12 @@ function adminAdjustments(){
 }
 function openRecusaAjuste(id){
   const a=state.adjustments.find(x=>x.id===id);if(!a)return;
-  openModal({content:`<div class="modal-head"><h3>✕ Recusar solicitação — ${a.emp}</h3></div>
+  openModal({content:`<div class="modal-head"><h3>✕ Recusar solicitação — ${escapeHtml(a.emp)}</h3></div>
   <div class="modal-body">
     <div class="card" style="background:var(--surface-2);box-shadow:none;margin-bottom:14px"><div class="mini-list">
       ${infoLine('📅','Data',fmtd(a.data))}
       ${infoLine('⏱️','Tipo de registro',a.tipo)}
-      ${infoLine('💬','Motivo do colaborador',a.motivo+(a.obs?' — '+a.obs:''))}
+      ${infoLine('💬','Motivo do colaborador',escapeHtml(a.motivo+(a.obs?' — '+a.obs:'')))}
     </div></div>
     <div class="field"><label>Motivo da recusa (obrigatório)</label><textarea class="input" id="recMotivo" placeholder="Explique por que a solicitação está sendo recusada…"></textarea></div>
   </div>
@@ -3695,12 +3701,12 @@ function openRecusaAjuste(id){
 }
 function openAjusteEdit(id){
   const a=state.adjustments.find(x=>x.id===id);
-  openModal({content:`<div class="modal-head"><h3>✏️ Editar ponto — ${a.emp}</h3></div>
+  openModal({content:`<div class="modal-head"><h3>✏️ Editar ponto — ${escapeHtml(a.emp)}</h3></div>
   <div class="modal-body">
     <div class="card" style="background:var(--surface-2);box-shadow:none;margin-bottom:14px"><div class="mini-list">
       ${infoLine('📅','Data',fmtd(a.data))}
       ${infoLine('⏱️','Tipo de registro',a.tipo)}
-      ${infoLine('💬','Motivo informado',a.motivo+(a.obs?' — '+a.obs:''))}
+      ${infoLine('💬','Motivo informado',escapeHtml(a.motivo+(a.obs?' — '+a.obs:'')))}
     </div></div>
     <div class="field"><label>Horário corrigido</label><input class="input" type="time" id="ajHora" value="${a.para&&a.para.includes(':')?a.para:'08:00'}"></div>
     <div class="field"><label>Observação do administrador (opcional)</label><textarea class="input" id="ajObs" placeholder="Ex.: ajuste conferido com o cartão de acesso"></textarea></div>
@@ -4040,7 +4046,7 @@ function espelhoSection(x,bounds){
     </header>
     <div class="esp-info">
       <div class="esp-emp">
-        <b>${x.emp}</b>
+        <b>${escapeHtml(x.emp)}</b>
         ${cargo?`<small>${cargo}</small>`:''}
       </div>
       <div class="esp-period">
@@ -4310,8 +4316,8 @@ function adminAbsences(){
     <div class="sub">Aceite ou recuse as solicitações dos colaboradores</div>
     <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Período</th><th>Dias</th><th>Abono</th><th>Observação</th><th>Decisão</th></tr></thead>
     <tbody>${pend.map(v=>`<tr>
-      <td><b>${v.emp}</b></td><td>${fmtd(v.ini)} → ${fmtd(v.fim)}</td><td><b>${v.dias}</b> dias</td>
-      <td>${v.abono?'<span class="badge b-info">Sim</span>':'—'}</td><td><small style="color:var(--muted)">${v.obs||'—'}</small></td>
+      <td><b>${escapeHtml(v.emp)}</b></td><td>${fmtd(v.ini)} → ${fmtd(v.fim)}</td><td><b>${v.dias}</b> dias</td>
+      <td>${v.abono?'<span class="badge b-info">Sim</span>':'—'}</td><td><small style="color:var(--muted)">${escapeHtml(v.obs||'—')}</small></td>
       <td style="white-space:nowrap">
         <button class="btn sm green" onclick="decideVacation(${v.id},'aceitar')">✓ Aceitar</button>
         <button class="btn sm danger" onclick="decideVacation(${v.id},'recusar')">✕ Recusar</button>
@@ -4319,10 +4325,10 @@ function adminAbsences(){
     :`<div class="card" style="margin-top:16px"><h3>Solicitações de férias</h3><div style="color:var(--muted);padding:6px 0">Nenhuma solicitação pendente. 🎉</div></div>`;
   const emFerias=state.vacations.filter(v=>v.status==='agendada').length;
   const vacAll=state.vacations.slice().sort((a,b)=>b.ini.localeCompare(a.ini)).map(v=>`<tr>
-    <td><b>${v.emp}</b></td><td>🏖️ Férias</td><td>${fmtd(v.ini)}</td><td>${fmtd(v.fim)}</td><td>${v.dias}</td>
+    <td><b>${escapeHtml(v.emp)}</b></td><td>🏖️ Férias</td><td>${fmtd(v.ini)}</td><td>${fmtd(v.fim)}</td><td>${v.dias}</td>
     <td>${v.abono?'Abono: sim':'—'}</td><td><span class="badge ${vacBadge(v.status)}">${v.status}</span></td></tr>`).join('');
-  const afast=state.afastamentos.map(a=>`<tr><td><b>${a.emp}</b></td><td>${a.tipo}</td><td>${fmtd(a.ini)}</td><td>${fmtd(a.fim)}</td>
-    <td>${a.dias}</td><td>${a.det}</td><td><span class="badge ${a.badge}">${a.status}</span></td></tr>`).join('');
+  const afast=state.afastamentos.map(a=>`<tr><td><b>${escapeHtml(a.emp)}</b></td><td>${escapeHtml(a.tipo)}</td><td>${fmtd(a.ini)}</td><td>${fmtd(a.fim)}</td>
+    <td>${a.dias}</td><td>${escapeHtml(a.det)}</td><td><span class="badge ${a.badge}">${a.status}</span></td></tr>`).join('');
   return `${head('Férias & Afastamentos','Aprove férias e cadastre folgas, afastamentos e atestados.',
     `<button class="btn ghost" onclick="openAtestadoForm()">🩺 Cadastrar Atestado</button>
      <button class="btn primary" onclick="openAdminVacationForm()">＋ Cadastrar Férias</button>`)}
@@ -4614,7 +4620,7 @@ function adminSuporte(){
       const preview=prefix+escapeHtml((r.last.msg||'').slice(0,70))+((r.last.msg||'').length>70?'…':'');
       return `<div class="mini-item sup-list-item" onclick="openSuporteThread('${r.emp.replace(/'/g,"\\'")}')">
       ${r.av?`<img class="tavatar" src="${r.av}">`:`<div class="ic" style="background:var(--surface-2)">🎧</div>`}
-      <div class="txt"><b class="${r.unread?'unread':''}">${r.emp}</b><small>${preview}</small></div>
+      <div class="txt"><b class="${r.unread?'unread':''}">${escapeHtml(r.emp)}</b><small>${preview}</small></div>
       <span class="time">${fmtSupTime(r.last.at)}</span>
     </div>`;
     }).join(''):`<div class="sup-empty">Nenhuma mensagem de Suporte recebida ainda.</div>`;

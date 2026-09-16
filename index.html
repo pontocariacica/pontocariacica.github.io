@@ -1857,6 +1857,50 @@ function reopenPeriod(nome,pk){
   state.periodReopenedAt[nome]=state.periodReopenedAt[nome]||{};
   state.periodReopenedAt[nome][pk]=new Date().toISOString();
 }
+// Migra TODO o histórico de um colaborador (registros, fechamentos, período fechado/reaberto,
+// ajustes, férias, afastamentos) do nome antigo pro nome novo — usada por saveEmployee() quando o
+// Admin edita o nome de alguém. Sem isso, o vínculo se perde: tudo continua salvo sob o texto
+// antigo, e o cartão do colaborador (que agora é buscado pelo nome novo) aparece vazio mesmo tendo
+// pontos reais batidos.
+function renameEmployeeEverywhere(nomeAntigo,nomeNovo){
+  if(!nomeAntigo||!nomeNovo||nomeAntigo===nomeNovo)return;
+  const nowIso=new Date().toISOString(),nowTs=Date.now();
+  const renomeiaCampo=(arr)=>{
+    if(!arr)return;
+    arr.forEach(x=>{if(x&&x.emp===nomeAntigo){x.emp=nomeNovo;x._ts=nowTs;if('at'in x)x.at=nowIso;}});
+  };
+  renomeiaCampo(state.registros);
+  // fechamentos são mesclados por chave composta [emp,periodKey,tipo]: renomear o emp em memória
+  // muda a chave e abandona a antiga, permitindo que um remoto desatualizado a ressuscite como um
+  // "ponto fantasma" do nome antigo. Por isso, além de renomear, gravamos uma cópia com a chave
+  // antiga marcada como .reopened (mesmo mecanismo do Reabrir Folha) para que ela vença qualquer
+  // versão antiga vinda do servidor na próxima mesclagem.
+  const tombstonesFechamentos=[];
+  (state.fechamentos||[]).forEach(x=>{
+    if(x&&x.emp===nomeAntigo){
+      tombstonesFechamentos.push({emp:nomeAntigo,periodKey:x.periodKey,tipo:x.tipo,reopened:true,at:nowIso,_ts:nowTs});
+    }
+  });
+  renomeiaCampo(state.fechamentos);
+  if(tombstonesFechamentos.length)state.fechamentos=(state.fechamentos||[]).concat(tombstonesFechamentos);
+  renomeiaCampo(state.adjustments);
+  renomeiaCampo(state.vacations);
+  renomeiaCampo(state.afastamentos);
+  if(state.closedPeriods&&state.closedPeriods[nomeAntigo]){
+    state.closedPeriods[nomeNovo]=Array.from(new Set([...(state.closedPeriods[nomeNovo]||[]),...state.closedPeriods[nomeAntigo]]));
+    delete state.closedPeriods[nomeAntigo];
+  }
+  ['periodClosedAt','periodReopenedAt'].forEach(k=>{
+    if(state[k]&&state[k][nomeAntigo]){
+      state[k][nomeNovo]=state[k][nomeNovo]||{};
+      Object.entries(state[k][nomeAntigo]).forEach(([pk,ts])=>{
+        const atual=state[k][nomeNovo][pk];
+        if(!atual||new Date(ts).getTime()>new Date(atual).getTime())state[k][nomeNovo][pk]=ts;
+      });
+      delete state[k][nomeAntigo];
+    }
+  });
+}
 function previousPeriodOpen(){
   if(!(state.role==='colab'&&state.user))return false;
   const prev=previousPeriod();
@@ -3492,9 +3536,16 @@ function saveEmployee(id){
   if(dup||data.email.toLowerCase()===ADMIN_USER){toast('Login em uso','Este login não está disponível (reservado ou já usado).','err');return;}
   if(id){
     const e=state.employees.find(x=>x.id===id);
+    const nomeAntigo=e.nome;
     Object.assign(e,data,{login:data.email,senha,_ts:Date.now()});
+    // registros/fechamentos/closedPeriods etc. são referenciados pelo NOME do colaborador (texto),
+    // não pelo id — sem isso, renomear alguém (ex.: completar o nome dele) "perdia" todo o
+    // histórico: o cartão dele passava a aparecer vazio, porque tudo continuava salvo sob o nome
+    // antigo. Bug real encontrado em produção logo depois de um "Angelo" virar "Angelo Custodio T.
+    // Da Penha" — os 12 registros dele ficaram órfãos, presos no nome antigo.
+    if(data.nome&&data.nome!==nomeAntigo)renameEmployeeEverywhere(nomeAntigo,data.nome);
     state.logs.unshift({quem:'Admin',acao:'Editou funcionário / usuário',alvo:e.nome,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
-    closeModal();render();toast('Salvo',e.nome+' foi atualizado.','info');
+    saveNow();closeModal();render();toast('Salvo',e.nome+' foi atualizado.','info');
   }else{
     const ini=data.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
     const emp={id:Date.now(),_ts:Date.now(),banco:'+00:00',av:AV('#1f3a68',ini),login:data.email,senha,

@@ -4392,7 +4392,9 @@ function imprimirFolhaDoPeriodo(pk){
   if(!fechados.length){toast('Nada a imprimir','Não há pontos fechados neste período.','info');return;}
   const xs=fechados.map(f=>({emp:f.emp,status:'fechado'}));
   const pb=periodBoundsFromKey(pk);
-  const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,pb)}</div>`).join('');
+  // "print-page" é o que diz pra printHTML() onde começar uma folha nova pra cada colaborador —
+  // ver comentário em printHTML sobre por que "page-break-after" (classe .pb) sozinho não bastava.
+  const inner=xs.map(x=>`<div class="print-page pb">${espelhoSection(x,pb)}</div>`).join('');
   printHTML(folhaDocHTML(inner),'Fechamento de Folha - '+periodLabel(pb));
   toast('Gerando PDF',`${xs.length} ponto(s) fechado(s) do período • pode levar alguns segundos.`,'info');
 }
@@ -4443,7 +4445,7 @@ function confirmImprimirPorPeriodo(){
   const fechouSet=new Set(fechadosNoPeriodo(pkRaw).map(x=>x.emp));
   const inPeriod=d=>{const dt=new Date(d+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const xs=ativos.map(e=>({emp:e.nome,status:fechouSet.has(e.nome)?'fechado':(collectPonto(e.nome,inPeriod).dias>0?'aberto':'pendencia')}));
-  const inner=xs.map((x,i)=>`<div class="${i<xs.length-1?'pb':''}">${espelhoSection(x,b)}</div>`).join('');
+  const inner=xs.map(x=>`<div class="print-page pb">${espelhoSection(x,b)}</div>`).join('');
   closeModal();
   printHTML(folhaDocHTML(inner),'Fechamento de Folha - Todos - '+periodLabel(b));
   toast('Gerando PDF',`${xs.length} colaborador(es) • ${periodLabel(b)} • pode levar alguns segundos.`,'info');
@@ -4807,15 +4809,43 @@ async function printHTML(html,filename){
     const pageW=pdf.internal.pageSize.getWidth(),pageH=pdf.internal.pageSize.getHeight();
     const imgW=pageW,imgH=canvas.height*imgW/canvas.width;
     const imgData=canvas.toDataURL('image/jpeg',0.92);
-    let heightLeft=imgH,position=0;
-    pdf.addImage(imgData,'JPEG',0,position,imgW,imgH);
-    heightLeft-=pageH;
-    while(heightLeft>0){
-      position=heightLeft-imgH;
-      pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,position,imgW,imgH);
-      heightLeft-=pageH;
-    }
+    // O documento inteiro vira UMA imagem contínua (html2canvas) e cada página do PDF é só uma
+    // "janela" fixa de pageH mm dessa imagem indo pra baixo — "page-break-after" (classe .pb) não
+    // tem nenhum efeito aqui, porque isso é uma propriedade de impressão/paginação de página HTML,
+    // e a imagem já saiu do html2canvas como um retrato único, sem página nenhuma. Resultado real
+    // relatado: pedindo "um ponto por folha" no Fechamento de Folha, se o espelho de um colaborador
+    // não preenchia a página inteira, o começo do espelho do PRÓXIMO colaborador entrava na mesma
+    // folha, porque o corte só olhava múltiplos de pageH, nunca onde um espelho termina e o outro
+    // começa. Correção: quem chama marca cada "folha" com a classe "print-page" (ver
+    // imprimirFolhaDoPeriodo/confirmImprimirPorPeriodo); aqui, se existir pelo menos uma, cada uma
+    // vira sua própria página nova no PDF (usando a MESMA imagem, só mudando o deslocamento vertical
+    // — o de sempre — mas resetando a cada seção em vez de deixar corrido). Documentos com uma seção
+    // só (ex.: espelho avulso de "Imprimir Espelho", relatórios gerais) continuam exatamente como
+    // antes, sem nenhuma seção marcada, então caem no mesmo comportamento de sempre.
+    const SCALE=2;
+    const mmPerCanvasPx=imgW/canvas.width;
+    const sections=Array.from(d.querySelectorAll('.print-page'));
+    const bodyTop=d.body.getBoundingClientRect().top;
+    const padTopPx=parseFloat(d.defaultView.getComputedStyle(d.body).paddingTop)||0;
+    const padTopMM=padTopPx*SCALE*mmPerCanvasPx;
+    const blocks=sections.length?sections.map((el,i)=>{
+      const topCss=el.getBoundingClientRect().top-bodyTop;
+      const bottomCss=i<sections.length-1?(sections[i+1].getBoundingClientRect().top-bodyTop):(d.body.scrollHeight);
+      const topMM=Math.max(0,topCss*SCALE*mmPerCanvasPx-padTopMM);
+      const bottomMM=Math.max(topMM,bottomCss*SCALE*mmPerCanvasPx-padTopMM);
+      return {topMM,heightMM:bottomMM-topMM};
+    }):[{topMM:0,heightMM:imgH}];
+    let firstPage=true;
+    blocks.forEach(({topMM,heightMM})=>{
+      // Sempre pelo menos 1 página por seção, mesmo que ela caiba em menos de uma pageH — é
+      // exatamente isso que garante "uma folha por colaborador" mesmo quando o espelho é curto.
+      const pages=Math.max(1,Math.ceil(heightMM/pageH));
+      for(let p=0;p<pages;p++){
+        if(!firstPage)pdf.addPage();
+        firstPage=false;
+        pdf.addImage(imgData,'JPEG',0,-(topMM+p*pageH),imgW,imgH);
+      }
+    });
     pdf.save(safeFn(filename||'documento')+'.pdf');
   }catch(e){
     console.error('Falha ao gerar PDF da impressão',e);

@@ -285,18 +285,19 @@ html[data-theme="dark"] .jbar-extra{color:#e0a835}
 .gprow-meta{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12px;gap:8px}
 .gprow-meta .mono{font-variant-numeric:tabular-nums;color:var(--text-2);font-weight:700;white-space:nowrap}
 .gprow-meta .mono small{font-weight:500;color:var(--muted)}
-/* Trilho único: preenchimento normal (azul→verde) até a marca, e o que passar da marca
-   (hora extra) continua em amarelo/laranja — a marca é o exato instante em que a hora extra
-   começa a contar pra aquele colaborador. */
-.gbar-track{position:relative;height:14px;border-radius:99px;background:var(--surface-2);
-  box-shadow:inset 0 1px 2px rgba(11,15,25,.10);overflow:hidden}
-.gbar-fill{position:absolute;left:0;top:0;height:100%;
-  background:linear-gradient(90deg,var(--blue),var(--green));transition:width .6s cubic-bezier(.2,.8,.2,1)}
-.gbar-fill-extra{position:absolute;top:0;height:100%;background:var(--s-warn);
-  transition:width .6s cubic-bezier(.2,.8,.2,1),left .6s cubic-bezier(.2,.8,.2,1)}
-.gbar-marker{position:absolute;top:0;bottom:0;width:2px;background:rgba(11,15,25,.4);
-  transition:left .6s cubic-bezier(.2,.8,.2,1)}
-html[data-theme="dark"] .gbar-marker{background:rgba(244,245,247,.55)}
+/* Uma "hora grande" por hora de jornada, cada uma com 6 barrinhas pequenas (10min cada) — ver
+   segTrackHTML. A barrinha atual (em andamento) enche proporcionalmente via --p (custom
+   property, 0 a 100%); as completas ficam com --p:100% e as futuras com --p:0%. Cor normal
+   (azul) até a jornada prevista terminar, cor de hora extra (laranja/amarelo) dali em diante —
+   o corte de cor acontece na barrinha certa, minuto a minuto, não só quando a hora inteira vira. */
+.gseg-track{display:flex;gap:3px;height:14px}
+.gseg-hour{flex:1;display:flex;gap:1.5px;min-width:0}
+.gseg-hour+.gseg-hour{margin-left:2px}
+.gseg-tick{flex:1;min-width:2px;height:100%;border-radius:2px;background:var(--surface-2);
+  box-shadow:inset 0 1px 2px rgba(11,15,25,.10);
+  background-image:linear-gradient(90deg,var(--blue) var(--p,0%),transparent var(--p,0%));
+  transition:background-image .3s linear}
+.gseg-tick.extra{background-image:linear-gradient(90deg,var(--s-warn) var(--p,0%),transparent var(--p,0%))}
 @media (max-width:680px){
   .gprow{flex-direction:column;align-items:stretch;gap:8px}
   .gprow-who{width:auto}
@@ -2554,28 +2555,40 @@ function jornadaCard(){
   </div>`;
 }
 
-/* ===== Andamento do dia de todos os colaboradores (Painel do Admin) ===== */
-// Calcula a escala do trilho (gbar-track) e onde cai a "marca" que indica o início da hora
-// extra. O trilho sempre tem folga sobrando à direita da marca (35% da jornada prevista, ou o
-// tanto de hora extra já feito + 30min, o que for maior) pra hora extra ter espaço pra aparecer
-// sem que a barra pareça sempre "estourando" o fim.
-function gaugeMetrics(j){
-  const maxScale=j.previstaMin>0
-    ?Math.max(j.previstaMin*1.35,j.previstaMin+j.extraMin+30)
-    :Math.max(j.trabMin+60,480); // domingo/feriado (previstaMin=0): escala só pelo que já foi trabalhado
-  const markerPct=j.previstaMin>0?Math.min(96,j.previstaMin/maxScale*100):0;
-  const trabPct=Math.min(100,j.trabMin/maxScale*100);
-  const normalPct=Math.min(trabPct,markerPct);
-  const extraPct=Math.max(0,trabPct-markerPct);
-  return {maxScale,markerPct,normalPct,extraPct};
+/* ===== Andamento do dia de todos os colaboradores (Painel do Admin) =====
+   Pedido do Admin: em vez de uma barra contínua com uma marca indicando onde a hora extra começa,
+   mostrar em barrinhas — uma "hora grande" pra cada hora de jornada, e dentro de cada uma, 6
+   barrinhas pequenas (10 minutos cada). A cor muda de normal pra hora extra exatamente na
+   barrinha em que a jornada prevista termina (minuto a minuto, não só quando a hora inteira
+   vira — ver segTrackHTML), então o corte fica no lugar certo mesmo quando a jornada não é um
+   número redondo de horas (ex.: 06:30–10:30). A barrinha em andamento agora mesmo enche aos
+   poucos (proporcional aos segundos already passados dela), em vez de pular de uma vez a cada
+   10 minutos — atualizado a cada segundo por updateAdminProgressLive.
+*/
+function segTrackHTML(j){
+  const previstaMin=j.previstaMin||0, trabMin=j.trabMin||0;
+  // Nunca menos que 1h de "trilho" (início do dia, ninguém bateu ponto ainda) — sempre pelo menos
+  // o suficiente pra cobrir a jornada prevista inteira e o que já foi trabalhado (hora extra
+  // incluída, pra a barra crescer sozinha se passar da jornada).
+  const totalMin=Math.max(previstaMin,trabMin,60);
+  const totalH=Math.ceil(totalMin/60);
+  let html='';
+  for(let h=0;h<totalH;h++){
+    html+='<div class="gseg-hour">';
+    for(let t=0;t<6;t++){
+      const inicioMin=h*60+t*10;
+      // Sem jornada prevista (domingo/feriado liberado) — tudo que for trabalhado conta como
+      // hora extra desde o primeiro minuto, igual o comportamento anterior.
+      const extra=previstaMin>0?(inicioMin>=previstaMin):true;
+      const pct=Math.max(0,Math.min(100,Math.round((trabMin-inicioMin)/10*100)));
+      html+=`<div class="gseg-tick${extra?' extra':''}" style="--p:${pct}%"></div>`;
+    }
+    html+='</div>';
+  }
+  return html;
 }
 function gaugeBarHTML(j,idp){
-  const g=gaugeMetrics(j);
-  return `<div class="gbar-track" id="${idp}Track">
-    <div class="gbar-fill" id="${idp}Fill" style="width:${g.normalPct}%"></div>
-    <div class="gbar-fill-extra" id="${idp}FillExtra" style="left:${g.markerPct}%;width:${g.extraPct}%"></div>
-    ${j.previstaMin>0?`<div class="gbar-marker" id="${idp}Marker" style="left:${g.markerPct}%" title="A partir daqui conta hora extra (${j.fim})"></div>`:''}
-  </div>`;
+  return `<div class="gseg-track" id="${idp}Track">${segTrackHTML(j)}</div>`;
 }
 function empStatusBadgeHTML(j){
   if(!j.temEntrada)return '<span class="badge b-mut">Não bateu ponto ainda</span>';
@@ -2618,15 +2631,13 @@ function updateAdminProgressLive(){
   (state.employees||[]).forEach(emp=>{
     if(emp.status==='inativo'||emp.status==='ferias'||emp.status==='atestado')return;
     const idp='gp'+emp.id;
-    const fillEl=document.getElementById(idp+'Fill');
-    if(!fillEl)return; // linha "Folga hoje" (sem barra) ou funcionário novo ainda não renderizado
+    const trackEl=document.getElementById(idp+'Track');
+    if(!trackEl)return; // linha "Folga hoje" (sem barra) ou funcionário novo ainda não renderizado
     const j=jornadaInfoFor(emp);
-    const g=gaugeMetrics(j);
-    fillEl.style.width=g.normalPct+'%';
-    const fillExtraEl=document.getElementById(idp+'FillExtra');
-    if(fillExtraEl){fillExtraEl.style.left=g.markerPct+'%';fillExtraEl.style.width=g.extraPct+'%';}
-    const markerEl=document.getElementById(idp+'Marker');
-    if(markerEl)markerEl.style.left=g.markerPct+'%';
+    // Regenera as barrinhas inteiras a cada segundo (em vez de tentar atualizar cada uma
+    // individualmente) — o número de "horas grandes" pode crescer ao vivo (hora extra começando
+    // agora mesmo), então é mais simples e igualmente barato refazer o HTML todo do trilho.
+    trackEl.innerHTML=segTrackHTML(j);
     const timeEl=document.getElementById(idp+'Time');
     if(timeEl)timeEl.innerHTML=fmtMin(j.trabMin)+' <small>de '+fmtMin(j.previstaMin)+'</small>';
     const statusEl=document.getElementById(idp+'Status');
@@ -3419,7 +3430,7 @@ function adminDashboard(){
      <button class="btn primary" onclick="openEmployeeForm()">＋ Novo Funcionário</button>`)}
   <div class="card">
     <h3>Andamento do dia</h3>
-    <div class="sub">Todos os colaboradores, de uma vez só — a marca clara na barra indica onde a hora extra começa a contar.</div>
+    <div class="sub">Todos os colaboradores, de uma vez só — cada barrinha vale 10 minutos; a cor muda pra laranja assim que a hora extra começa a contar.</div>
     <div id="gpList">
       ${e.length?withJ.map(({emp,j})=>collabProgressRow(emp,j)).join(''):emptyBox('Cadastre funcionários para acompanhar o andamento do dia.')}
     </div>

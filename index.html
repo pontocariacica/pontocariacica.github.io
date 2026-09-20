@@ -884,7 +884,7 @@ try{setInterval(reconcileSupabaseRegistros,5*60*1000);}catch(e){}
 
 // 'punchesByEmp' foi removido desta lista de propósito — ver comentário na definição de state.punchesByEmp.
 const PERSIST_KEYS=['employees','deletedKeys','adjustments','logs','holidays','vacations','afastamentos','escalas','folha','notifications','registros','closedPeriods','periodClosedAt','periodReopenedAt','fechamentos','config','suporte'];
-let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='';
+let db=null, cloudReady=false, sessionReady=false, cloudLoaded=false, applyingRemote=false, saveTimer=null, lastPushed='', pendingPushJs=null, cloudRetryTimer=null;
 
 function stableJSON(src){const o={};PERSIST_KEYS.forEach(k=>o[k]=src?src[k]:undefined);return JSON.stringify(o);}
 function persistSlice(){const o={};PERSIST_KEYS.forEach(k=>o[k]=state[k]);return o;}
@@ -939,13 +939,26 @@ function saveNow(){
   trimGrowth();
   const data=persistSlice();
   const js=stableJSON(data);
-  if(js===lastPushed)return;
+  // "pendingPushJs" é o payload que já está em voo pra nuvem agora mesmo — evita reenviar o MESMO
+  // estado em duplicidade enquanto essa gravação ainda não terminou (isso sim é seguro, porque não
+  // marca nada como confirmado). "lastPushed" só reflete o que já foi CONFIRMADO pelo servidor
+  // (marcado dentro de saveToCloudMerged, só depois do ref.set() ter sucesso) — ver o comentário lá
+  // sobre o bug real que isso corrige (ponto batido com sinal instável nunca chegava ao Admin).
+  if(js===lastPushed||js===pendingPushJs)return;
   try{localStorage.setItem('pontoapp_v2',js);}catch(e){}
   // Só grava na nuvem DEPOIS de ter carregado os dados do servidor, para nunca
   // sobrescrever os cadastros existentes com um estado vazio ao atualizar/abrir o sistema.
   if(cloudReady&&cloudLoaded&&db){
-    lastPushed=js; // otimista — evita reprocessar o mesmo estado várias vezes enquanto a mesclagem roda
-    cloudWriteChain=cloudWriteChain.then(()=>saveToCloudMerged(data)).catch(e=>console.warn('Falha ao salvar na nuvem:',e&&e.message));
+    pendingPushJs=js;
+    cloudWriteChain=cloudWriteChain.then(()=>saveToCloudMerged(data)).then(ok=>{
+      if(!ok)throw new Error('gravação não confirmada');
+    }).catch(e=>{
+      console.warn('Falha ao salvar na nuvem — tentando novamente em breve:',e&&e.message);
+      // Sem isso, uma falha de rede transitória (comum em celular em campo) deixava o ponto batido
+      // preso só neste aparelho pra sempre, porque nada mais ia tentar gravar de novo sozinho.
+      if(cloudRetryTimer)clearTimeout(cloudRetryTimer);
+      cloudRetryTimer=setTimeout(()=>{cloudRetryTimer=null;saveNow();},5000);
+    }).finally(()=>{ if(pendingPushJs===js)pendingPushJs=null; });
   } else {
     lastPushed=js;
     sendSnapshotToSupabase(data); // Firebase indisponível: manda mesmo assim uma cópia pro Supabase
@@ -1283,11 +1296,23 @@ async function saveToCloudMerged(data){
     state.suporte=merged.suporte;
   }
   const jsFinal=stableJSON(merged);
-  lastPushed=jsFinal;
   try{localStorage.setItem('pontoapp_v2',jsFinal);}catch(e){}
+  // "lastPushed" só pode ser marcado DEPOIS que a gravação na nuvem realmente confirma — não antes.
+  // Bug real encontrado em produção: um colaborador batia o ponto num celular com sinal instável (em
+  // rota, área de sinal fraco etc.); o app mostrava sucesso normalmente (a gravação local é sempre
+  // imediata), mas o ref.set() abaixo podia falhar silenciosamente por causa da rede (só um
+  // console.warn, sem toast — ver saveNow). Como "lastPushed" ANTES era marcado logo aqui, antes do
+  // ref.set() sequer terminar, a próxima vez que saveNow() rodasse com o mesmo estado (nada mudou —
+  // o colaborador já tinha ido embora) ela via "js===lastPushed" e nem tentava gravar de novo: o
+  // ponto ficava preso só no aparelho dele para sempre, sem o Admin nunca saber, até ele bater outro
+  // ponto ou reabrir o app (o que dispara uma nova sincronização do zero). Marcar só em caso de
+  // sucesso — e o retry automático em saveNow() — corrige isso: uma falha de rede agora se corrige
+  // sozinha na próxima tentativa, sem depender de nenhuma ação do colaborador.
   await ref.set(JSON.parse(JSON.stringify(merged)));
+  lastPushed=jsFinal;
   refreshUI();
   sendSnapshotToSupabase(merged); // cópia completa em paralelo — não bloqueia nem afeta o Firebase
+  return true;
 }
 function refreshUI(){
   if(state.role&&state.user){renderNav();render();updateNotifBadge();}

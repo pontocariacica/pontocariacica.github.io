@@ -2606,11 +2606,20 @@ function gprowShell(emp,badgeHTML,dim){
   return `<div class="gprow"${dim?' style="opacity:.55"':''}>${gprowWho(emp)}
     <div class="gprow-bar"><div class="gprow-meta" style="justify-content:flex-end">${badgeHTML}</div></div></div>`;
 }
+// "emp.status==='ferias'" é uma marcação manual (o Admin muda no cadastro do funcionário) — mas
+// férias de verdade são aprovadas em Férias & Folgas (state.vacations) e o status do cadastro
+// nem sempre é atualizado junto (ninguém lembra de fazer os dois). Resultado real visto pelo
+// Admin: um colaborador com férias aprovadas e em curso (bloqueado de bater ponto — ver
+// registroBloqueado) aparecia igual a alguém que simplesmente esqueceu de bater o ponto
+// ("Não bateu ponto ainda"), sem nenhuma indicação de que ele está de férias. Checar
+// feriasDe() aqui também (além do status manual) resolve isso sem depender de ninguém lembrar
+// de mudar o status à mão.
+const emFeriasHoje=emp=>emp.status==='ferias'||!!feriasDe(emp.nome,todayKey());
 // j vem pré-calculado (jornadaInfoFor) pra quem já bate ponto normalmente — fica null pra quem
 // está inativo/de férias/atestado, casos em que não faz sentido nenhum mostrar andamento do dia.
 function collabProgressRow(emp,j){
   if(emp.status==='inativo')return gprowShell(emp,'<span class="badge b-mut">Inativo</span>',true);
-  if(emp.status==='ferias')return gprowShell(emp,'<span class="badge b-info">🏖️ Em férias</span>');
+  if(emFeriasHoje(emp))return gprowShell(emp,'<span class="badge b-info">🏖️ Em férias</span>');
   if(emp.status==='atestado')return gprowShell(emp,'<span class="badge b-warn">🩺 Atestado</span>');
   if(j.isDescanso&&!j.temEntrada)return gprowShell(emp,'<span class="badge b-mut">Folga hoje</span>');
   const idp='gp'+emp.id;
@@ -2629,7 +2638,7 @@ function updateAdminProgressLive(){
   if(state.role!=='admin'||state.page!=='dashboard')return;
   if(!document.getElementById('gpList'))return;
   (state.employees||[]).forEach(emp=>{
-    if(emp.status==='inativo'||emp.status==='ferias'||emp.status==='atestado')return;
+    if(emp.status==='inativo'||emFeriasHoje(emp)||emp.status==='atestado')return;
     const idp='gp'+emp.id;
     const trackEl=document.getElementById(idp+'Track');
     if(!trackEl)return; // linha "Folga hoje" (sem barra) ou funcionário novo ainda não renderizado
@@ -3416,7 +3425,7 @@ function adminDashboard(){
   // Andamento do dia de cada colaborador — quem está em hora extra ou com o dia em andamento
   // aparece primeiro (é quem o admin mais precisa acompanhar agora); quem ainda não bateu ponto
   // vem em seguida; encerrados e férias/atestado/inativo ficam por último.
-  const withJ=e.map(emp=>({emp,j:(emp.status==='inativo'||emp.status==='ferias'||emp.status==='atestado')?null:jornadaInfoFor(emp)}));
+  const withJ=e.map(emp=>({emp,j:(emp.status==='inativo'||emFeriasHoje(emp)||emp.status==='atestado')?null:jornadaInfoFor(emp)}));
   const prio=({emp,j})=>{
     if(!j)return emp.status==='inativo'?5:4;
     if(j.emAndamento&&j.extraMin>0)return 0;

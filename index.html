@@ -2787,6 +2787,7 @@ function colabHistory(){
   const rows=todasLinhas.length
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.afastado)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#EDE9FE;color:#5B21B6">🚷 Afastado</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
@@ -2926,7 +2927,7 @@ function collectPonto(empName,keep){
   const previstaWeekday=Math.max(0,(parseHM(jw[1]||'17:00')-parseHM(jw[0]||'08:00'))/60000-almocoOverlapMin(hmToMin(jw[0]||'08:00'),hmToMin(jw[1]||'17:00')));
   const js=((empObj&&empObj.jornadaSab)||'08:00–12:00').split(/[–-]/).map(s=>s.trim());
   const previstaSab=Math.max(0,(parseHM(js[1]||'12:00')-parseHM(js[0]||'08:00'))/60000-almocoOverlapMin(hmToMin(js[0]||'08:00'),hmToMin(js[1]||'12:00')));
-  const ensure=d=>{if(!days[d])days[d]={entrada:null,saida:null,adj:false,ferias:false};return days[d];};
+  const ensure=d=>{if(!days[d])days[d]={entrada:null,saida:null,adj:false,ferias:false,afastado:false};return days[d];};
   // Se por algum motivo existir mais de um registro do mesmo tipo no mesmo dia (ex.: lançamento
   // manual repetido), escolhe de forma DETERMINÍSTICA em vez de depender da ordem do array:
   // prioriza o que já foi ajustado e, empatando, o mais recente (campo "at").
@@ -2977,12 +2978,31 @@ function collectPonto(empName,keep){
       cur.setDate(cur.getDate()+1);
     }
   });
+  // Mesmo tratamento acima, agora para afastamentos lançados pelo Admin (ver saveAfastamento) —
+  // pedido do administrador: quando um colaborador precisa se afastar (licença, INSS, suspensão
+  // etc.), o período lançado em "Férias & Afastamentos" precisa aparecer destacado como "Afastado"
+  // no ponto dele (folha, impressão e histórico), do mesmo jeito que férias já aparece. Mesma
+  // exceção de domingo/feriado dentro do período, pelo mesmo motivo do bloco de férias acima.
+  (state.afastamentos||[]).filter(a=>a.emp===empName&&a.tipo&&a.tipo.includes('Afastado')&&a.status!=='cancelado'&&a.ini&&a.fim).forEach(a=>{
+    let cur=new Date(a.ini+'T12:00:00');
+    const fim=new Date(a.fim+'T12:00:00');
+    while(cur<=fim){
+      const dk=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
+      const ehDescanso=cur.getDay()===0||!!feriadoDe(dk);
+      if(dk<=tkMax&&keep(dk)&&!days[dk]&&!ehDescanso)ensure(dk).afastado=true;
+      cur.setDate(cur.getDate()+1);
+    }
+  });
   const dias=Object.keys(days).sort();
   const rows=[]; let jantas=0, extraTotalMin=0;
   dias.forEach(d=>{
     const day=days[d];
     if(day.ferias){
       rows.push({data:d,entrada:'—',saida:'—',total:'Férias',extraMin:0,extra:'—',janta:false,ajustado:false,ferias:true});
+      return;
+    }
+    if(day.afastado){
+      rows.push({data:d,entrada:'—',saida:'—',total:'Afastado',extraMin:0,extra:'—',janta:false,ajustado:false,afastado:true});
       return;
     }
     const jantou=!!(day.saida&&day.saida>'18:59'); if(jantou)jantas++;
@@ -3007,7 +3027,7 @@ function collectPonto(empName,keep){
     }
     rows.push({data:d,entrada:day.entrada||'—',saida:day.saida||'—',total,extraMin,extra:extraMin>0?fmtMin(extraMin):'—',janta:jantou,ajustado:day.adj});
   });
-  return {rows,jantas,dias:dias.length,extraTotalMin,extraTotal:fmtMin(extraTotalMin),feriasDias:rows.filter(r=>r.ferias).length};
+  return {rows,jantas,dias:dias.length,extraTotalMin,extraTotal:fmtMin(extraTotalMin),feriasDias:rows.filter(r=>r.ferias).length,afastadoDias:rows.filter(r=>r.afastado).length};
 }
 function pontoMonthData(empName,ym){return collectPonto(empName,d=>d.startsWith(ym));}
 // Período (16 a 15, igual ao resto do sistema — fechamento, espelho, visão do Admin) que o
@@ -3048,6 +3068,7 @@ function colabAcompanhar(){
   const rows=todasLinhas.length
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.afastado)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#EDE9FE;color:#5B21B6">🚷 Afastado</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
@@ -3123,6 +3144,7 @@ function verPontosAnterioresDetalhe(k){
   const rows=todasLinhas.length
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.afastado)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#EDE9FE;color:#5B21B6">🚷 Afastado</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
@@ -3924,6 +3946,7 @@ function adminRegAcompanhar(){
   const rows=todasLinhas.length
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.afastado)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#EDE9FE;color:#5B21B6">🚷 Afastado</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
@@ -4313,6 +4336,8 @@ function editarEspelho(empName,pk,diaExtra){
   }
   const rows=linhas.length?linhas.map(r=>r.ferias
     ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="2" style="text-align:center;color:var(--muted)">🏖️ Férias — não editável aqui</td><td></td></tr>`
+    : r.afastado
+    ? `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="2" style="text-align:center;color:var(--muted)">🚷 Afastado — não editável aqui</td><td></td></tr>`
     : `<tr>
         <td><b>${fmtd(r.data)}</b>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
         <td><input class="input" type="time" id="eeEnt_${r.data}" value="${r.entrada!=='—'?r.entrada:''}"></td>
@@ -4415,6 +4440,7 @@ function espelhoSection(x,bounds){
   const body=todasLinhas.length
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr class="feriasrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3"></td><td class="tc">🏖️ Férias</td></tr>`;
+        if(r.afastado)return `<tr class="afastadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3"></td><td class="tc">🚷 Afastado</td></tr>`;
         if(r.domingo)return `<tr class="offrow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Domingo</td><td class="tc">—</td></tr>`;
         if(r.feriado)return `<tr class="offrow feriadorow"><td>${fmtdCurto(r.data)}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc" colspan="3">Folga — Feriado: ${r.feriado}</td><td class="tc">—</td></tr>`;
         return `<tr><td>${fmtdCurto(r.data)}${r.ajustado?' <span class="adjmark">*</span>':''}</td><td>${diaSemanaAbrev(r.data)}</td><td class="tc">${r.entrada}</td><td class="tc">${r.saida}</td><td class="tc${r.extraMin>0?' hasextra':''}">${r.extraMin>0?'+'+r.extra:'—'}</td><td class="tc">${r.janta?'Sim':'—'}</td></tr>`;
@@ -4495,6 +4521,7 @@ function folhaDocHTML(inner){
     .tc{text-align:center}
     .adjmark{color:#4F46E5;font-weight:800}
     tr.feriasrow td{background:#fff4e0!important;color:#8a5a00;font-weight:700}
+    tr.afastadorow td{background:#EDE9FE!important;color:#5B21B6;font-weight:700}
     tr.offrow td{background:#13162B!important;color:#fff!important;font-style:italic}
     tr.feriadorow td{background:#E11D48!important;color:#fff!important;font-style:normal;font-weight:700}
     tfoot .tot td{background:#EEF0FF;font-weight:800;font-size:11.5px;color:#3730A3;padding:6px 8px;border-top:2px solid #4F46E5}
@@ -4741,18 +4768,19 @@ function adminAbsences(){
     <td>${a.dias}</td><td>${escapeHtml(a.det)}</td><td><span class="badge ${a.badge}">${a.status}</span></td></tr>`).join('');
   return `${head('Férias & Afastamentos','Aprove férias e cadastre folgas, afastamentos e atestados.',
     `<button class="btn ghost" onclick="openAtestadoForm()">🩺 Cadastrar Atestado</button>
+     <button class="btn ghost" onclick="openAfastamentoForm()">🚷 Cadastrar Afastamento</button>
      <button class="btn primary" onclick="openAdminVacationForm()">＋ Cadastrar Férias</button>`)}
   <div class="grid g-4">
     ${kpi('🏖️','var(--c1)','Em férias',emFerias,'Agendadas')}
     ${kpi('⏳','var(--c3)','Pendentes',pend.length,'Aguardando você')}
     ${kpi('🩺','var(--c5)','Atestados',state.afastamentos.filter(a=>a.tipo.includes('Atestado')).length,'Registrados')}
-    ${kpi('🔁','var(--c2)','Folgas',state.afastamentos.filter(a=>a.tipo.includes('Folga')).length,'Registradas')}
+    ${kpi('🚷','var(--c2)','Afastamentos',state.afastamentos.filter(a=>a.tipo.includes('Afastado')).length,'Registrados')}
   </div>
   ${pendCard}
   <div class="card" style="margin-top:16px"><h3>Todas as férias</h3>
     <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Tipo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Detalhe</th><th>Status</th></tr></thead>
     <tbody>${vacAll}</tbody></table></div></div>
-  <div class="card" style="margin-top:16px"><h3>Folgas & atestados</h3>
+  <div class="card" style="margin-top:16px"><h3>Afastamentos & atestados</h3>
     <div class="tbl-wrap"><table><thead><tr><th>Colaborador</th><th>Tipo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Detalhe</th><th>Status</th></tr></thead>
     <tbody>${afast}</tbody></table></div></div>`;
 }
@@ -4819,6 +4847,43 @@ function saveAtestado(){
   state.afastamentos.unshift({id:newId(),_ts:Date.now(),tipo:'🩺 Atestado',emp,ini,fim,dias,det:`${cid?'CID '+cid+' • ':''}${med||'—'}`,status:'homologado',badge:'b-info'});
   state.logs.unshift({quem:'Admin',acao:'Cadastrou atestado',alvo:`${emp} • ${dias} dia(s)`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
   closeModal();render();toast('Atestado cadastrado',emp+' • '+dias+' dia(s).','info');
+}
+// Afastamento (licença médica, INSS, licença não remunerada, suspensão etc.) — pedido do
+// administrador: precisava de uma opção de lançamento, dentro de "Férias & Afastamentos", pra
+// registrar quando um colaborador se afasta, pra ficar documentado no ponto dele (ver o bloco
+// correspondente em collectPonto, que marca cada dia do período como "🚷 Afastado" na folha, na
+// impressão e no histórico, igual já acontecia com férias). Período com início/fim (como férias),
+// em vez de só "dias" como o atestado, porque um afastamento costuma ter data de volta definida.
+function openAfastamentoForm(){
+  const opts=state.employees.map(e=>`<option>${e.nome}</option>`).join('');
+  openModal({content:`<div class="modal-head"><h3>🚷 Cadastrar Afastamento</h3></div>
+  <div class="modal-body">
+    <div class="field"><label>Colaborador</label><select class="input" id="afEmp">${opts}</select></div>
+    <div class="row2">
+      <div class="field"><label>Início</label><input class="input" type="date" id="afIni" oninput="updAdminAfastamento()"></div>
+      <div class="field"><label>Término</label><input class="input" type="date" id="afFim" oninput="updAdminAfastamento()"></div>
+    </div>
+    <div id="afCount" style="text-align:center;padding:12px;border-radius:12px;background:var(--surface-2);margin-bottom:12px">
+      <span style="font-size:22px;font-weight:800" id="afDias">0</span> dias corridos</div>
+    <div class="field"><label>Motivo</label><select class="input" id="afMotivo">
+      <option>Licença médica</option><option>Licença maternidade/paternidade</option>
+      <option>Afastamento INSS</option><option>Licença não remunerada</option>
+      <option>Suspensão</option><option>Outro</option></select></div>
+    <div class="field"><label>Observação (opcional)</label><input class="input" id="afObs" placeholder="Detalhes adicionais"></div>
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
+  <button class="btn primary" onclick="saveAfastamento()">Cadastrar</button></div>`});
+}
+function updAdminAfastamento(){const d=contarDias(document.getElementById('afIni').value,document.getElementById('afFim').value);
+  document.getElementById('afDias').textContent=d<0?'—':d;}
+function saveAfastamento(){
+  const emp=document.getElementById('afEmp').value,ini=document.getElementById('afIni').value,fim=document.getElementById('afFim').value;
+  const motivo=document.getElementById('afMotivo').value,obs=document.getElementById('afObs').value.trim();
+  const dias=contarDias(ini,fim);
+  if(dias<1){toast('Erro','Selecione um período válido.','err');return;}
+  state.afastamentos.unshift({id:newId(),_ts:Date.now(),tipo:'🚷 Afastado',emp,ini,fim,dias,det:motivo+(obs?' • '+obs:''),status:'homologado',badge:'b-warn'});
+  state.logs.unshift({quem:'Admin',acao:'Cadastrou afastamento',alvo:`${emp} • ${fmtd(ini)} a ${fmtd(fim)} (${motivo})`,ip:'187.12.44.9',hora:new Date().toISOString().slice(0,16).replace('T',' ')});
+  closeModal();saveNow();render();toast('Afastamento cadastrado',`${emp}: ${dias} dia(s) — ${motivo}.`,'info');
 }
 function adminHolidays(){
   const rows=state.holidays.slice().sort((a,b)=>a.data.localeCompare(b.data)).map(h=>{const i=state.holidays.indexOf(h);return `<tr><td><b>${fmtd(h.data)}</b></td><td>${h.nome}</td>

@@ -270,9 +270,14 @@ tbody tr:hover{background:var(--surface-2)}
 .punch-hero-foot b{font-size:19px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
 /* O próprio card virou o botão de registrar (antes era um botão cheio separado embaixo
    da trilha — ver pedido do administrador: "quero que este [o card] seja o botão"). Só
-   fica clicável/com o brilho quando dá pra registrar (.ready); durante a obtenção da
-   localização ganha .loading (trava novo toque e some com cliques duplicados). */
-.punch-hero.ready{cursor:pointer;animation:ppBtnGlow 2.6s ease-in-out infinite}
+   fica clicável quando dá pra registrar (.ready); durante a obtenção da localização
+   ganha .loading (trava novo toque e some com cliques duplicados).
+   OBS: sem animação contínua aqui de propósito — o card é recriado do zero a cada
+   render() (ex.: toda vez que o Firestore empurra uma atualização de QUALQUER
+   colaborador, o que acontece com frequência), então uma animação "infinite" reinicia
+   do zero a cada vez e aparece como uma piscada/salto visível (confirmado: em teste,
+   o box-shadow saltava do pico do pulso de volta pro repouso a cada render). */
+.punch-hero.ready{cursor:pointer}
 .punch-hero.ready:hover{transform:translateY(-2px);box-shadow:0 22px 44px rgba(30,27,75,.45)}
 .punch-hero.ready:active{transform:scale(.995)}
 .punch-hero.loading{pointer-events:none;opacity:.88}
@@ -298,7 +303,6 @@ tbody tr:hover{background:var(--surface-2)}
 .pr-lbl span{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1)}
 .pr-bar{flex:1;height:2px;background:var(--grid);margin:0 8px 27px;transition:background .3s}
 .pr-bar.filled{background:var(--green)}
-@keyframes ppBtnGlow{0%,100%{box-shadow:0 18px 40px rgba(30,27,75,.35)}50%{box-shadow:0 22px 48px rgba(30,27,75,.55)}}
 .timeline{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .tl-step{flex:1;min-width:120px;background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
 .tl-step.filled{border-color:var(--green);background:linear-gradient(135deg,rgba(22,163,74,.10),transparent)}

@@ -2743,9 +2743,22 @@ function colabPunch(){
 const flowItem=(n,t,s,c)=>`<div class="mini-item"><div class="ic" style="background:${c}22;color:${c};font-weight:800">${n}</div>
   <div class="txt"><b>${t}</b><small>${s}</small></div></div>`;
 
+// Período (16 a 15, igual ao resto do sistema) que o colaborador está navegando em "Meu
+// Histórico" — mesmo padrão de myAcompPeriodBounds/myAcompShift usado em "Acompanhar Ponto",
+// pra poder folhear os períodos passados e futuros com as setinhas ‹ ›.
+function myHistPeriodBounds(){const ref=state.myHistRef||todayKey();return periodBounds(new Date(ref+'T12:00:00'));}
+function myHistShift(delta){
+  const b=myHistPeriodBounds();
+  const d=new Date(delta<0?b.start:b.end);
+  d.setDate(d.getDate()+(delta<0?-1:1));
+  state.myHistRef=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  render();
+}
 function colabHistory(){
-  const b=currentPeriod();
+  const b=myHistPeriodBounds();
   const per=periodLabel(b);
+  const isCurrent=periodKey(b)===periodKey(currentPeriod());
+  const fechado=isPeriodClosed(state.user.nome,b);
   const inPeriod=x=>{const dt=new Date(x+'T00:00:00');return dt>=b.start&&dt<=b.end;};
   const d=collectPonto(state.user.nome,inPeriod);
   // Mesmo tratamento do espelho impresso (ver espelhoSection): monta uma linha pra CADA dia do
@@ -2782,11 +2795,18 @@ function colabHistory(){
         <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
     : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
-  return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
-    `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>
-     <button class="btn danger" onclick="fecharMeuPonto()">🔒 Fechar Meu Ponto</button>`)}
+  return `${head('Meu Histórico','Seus pontos, horas extras e jantas por período. Use as setas pra ver períodos anteriores ou futuros.',
+    `<button class="btn ghost" onclick="gerarEspelho('','${dateKey(b.start)}')">📄 Espelho PDF</button>
+     ${isCurrent&&!fechado?`<button class="btn danger" onclick="fecharMeuPonto()">🔒 Fechar Meu Ponto</button>`:''}`)}
   <div class="card">
-    <div class="sub" style="margin-bottom:6px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <div class="sub" style="margin:0">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)${fechado?' • <span class="badge b-good">🔒 Fechado</span>':(isCurrent?'':' • <span class="badge b-info">período em aberto</span>')}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn sm ghost" onclick="myHistShift(-1)" title="Período anterior">‹</button>
+        <b style="min-width:170px;text-align:center;font-size:13px">${per}</b>
+        <button class="btn sm ghost" onclick="myHistShift(1)" title="Próximo período">›</button>
+      </div>
+    </div>
     <div class="tbl-wrap"><table>
     <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Hora extra</th><th>Janta</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
@@ -5005,12 +5025,14 @@ function exportReport(name,fmt){
   }else{ printHTML(reportHTML(name,d),fn); toast('Gerando PDF',`${name} • o arquivo será baixado em instantes.`,'info'); return; }
   toast('Relatório gerado',`${name} • ${fmt}`,'info');
 }
-function gerarEspelho(nome){
-  // Reaproveita o mesmo modelo (e o mesmo período real, sempre o atual) usado pelo admin em
-  // imprimirPonto — antes esta função tinha seu próprio texto de período FIXO, sem nunca
-  // atualizar, o que fazia aparecer sempre "16/06 – 15/07" independente do mês real.
+function gerarEspelho(nome,ref){
+  // Reaproveita o mesmo modelo usado pelo admin em imprimirPonto — antes esta função tinha seu
+  // próprio texto de período FIXO, sem nunca atualizar, o que fazia aparecer sempre "16/06 –
+  // 15/07" independente do mês real. "ref" (opcional) é uma data dentro do período que o
+  // colaborador está vendo em "Meu Histórico" (ver myHistShift) — sem ela, cai no período atual.
   const quem=nome||(state.user?state.user.nome:'Colaborador');
-  imprimirPonto(quem);
+  const bounds=ref?periodBounds(new Date(ref+'T12:00:00')):undefined;
+  imprimirPonto(quem,bounds);
 }
 function adminLogs(){
   const rows=state.logs.map(l=>`<tr><td><b>${l.quem}</b></td><td>${l.acao}</td><td>${l.alvo}</td>

@@ -248,6 +248,31 @@ tbody tr:hover{background:var(--surface-2)}
 .uname b{font-size:13.5px}.uname small{color:var(--muted);font-size:11.5px;display:block}
 .tbl-wrap{overflow-x:auto}
 
+/* ============================ HISTÓRICO (resumo, filtros, tabela responsiva) ============================ */
+.hist-resumo{display:flex;flex-wrap:wrap;margin-bottom:14px;border:1px solid var(--border);
+  border-radius:14px;overflow:hidden}
+.hr-item{flex:1;min-width:108px;padding:12px 16px;border-right:1px solid var(--border);
+  background:var(--surface-2)}
+.hr-item:last-child{border-right:none}
+.hr-item b{display:block;font-size:19px;font-variant-numeric:tabular-nums;color:var(--text-1)}
+.hr-item small{color:var(--muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+@media(max-width:560px){.hr-item{min-width:45%;border-right:none;border-bottom:1px solid var(--border)}}
+.hist-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.hist-toolbar .input{height:38px;padding:0 14px 0 34px;width:220px;max-width:100%;
+  background:var(--surface-1) url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239092a6' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 11px center/15px}
+.hist-table tbody tr{transition:background .12s ease}
+.hist-table thead th{position:sticky;top:0;background:var(--surface-1);z-index:1}
+@media(max-width:640px){
+  .hist-table table,.hist-table thead,.hist-table tbody,.hist-table th,.hist-table td,.hist-table tr{display:block}
+  .hist-table thead{display:none}
+  .hist-table tbody tr{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;padding:4px 12px;background:var(--surface-1)}
+  .hist-table tbody tr[style*="background"]{padding:12px 14px}
+  .hist-table td{border:none;padding:7px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .hist-table td[data-th]::before{content:attr(data-th);color:var(--muted);font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.3px}
+  .hist-table td:first-child{padding-top:11px}
+}
+
 /* ============================ REGISTRO DE PONTO ============================ */
 .punch-hero{background:linear-gradient(135deg,rgba(79,70,229,.16),rgba(129,140,248,.12));
   border:1px solid var(--border);border-radius:22px;padding:26px;display:grid;
@@ -2743,6 +2768,58 @@ function colabPunch(){
 const flowItem=(n,t,s,c)=>`<div class="mini-item"><div class="ic" style="background:${c}22;color:${c};font-weight:800">${n}</div>
   <div class="txt"><b>${t}</b><small>${s}</small></div></div>`;
 
+/* ===== Histórico (Meu Histórico / Acompanhar Ponto / Pontos Anteriores / acompanhamento do Admin) =====
+   As 4 telas montam a MESMA lista de linhas por dia (ver cada função) e usam estes helpers em comum
+   pra: resumo em números no topo, busca por data + filtro por tipo de dia (chips), e a própria
+   tabela — que também ganha um layout empilhado (cartão por linha) em telas estreitas via a classe
+   .hist-table (ver CSS). Cada chamador usa uma chave de state própria pra filtro/busca (ex.:
+   'histFilterMy'/'histSearchMy' pro Meu Histórico) pra não compartilhar estado entre as telas. */
+function diaTipo(r){
+  if(r.ferias)return 'ferias';
+  if(r.domingo||r.feriado)return 'folga';
+  if(r.extraMin>0)return 'extra';
+  return 'normal';
+}
+function histResumoHTML(d,todasLinhas){
+  const diasTrabalhados=todasLinhas.filter(r=>!r.ferias&&!r.domingo&&!r.feriado&&r.entrada&&r.entrada!=='—').length;
+  const diasFerias=todasLinhas.filter(r=>r.ferias).length;
+  const diasFolga=todasLinhas.filter(r=>r.domingo||r.feriado).length;
+  return `<div class="hist-resumo">
+    <div class="hr-item"><b>${diasTrabalhados}</b><small>Dias com ponto</small></div>
+    <div class="hr-item"><b>${d.extraTotal}</b><small>Hora extra</small></div>
+    <div class="hr-item"><b>${d.jantas}</b><small>Janta(s)</small></div>
+    <div class="hr-item"><b>${diasFerias}</b><small>🏖️ Férias</small></div>
+    <div class="hr-item"><b>${diasFolga}</b><small>Domingo/Feriado</small></div>
+  </div>`;
+}
+// refreshCall: expressão JS a chamar depois de mudar o filtro/busca — 'render()' nas telas normais
+// (passam pelo ciclo normal de render, que já preserva foco/valor de inputs por id), mas o modal
+// de Pontos Anteriores (verPontosAnterioresDetalhe) vive fora disso (openModal mexe direto no
+// #overlay, render() não toca nele) — por isso ele passa uma chamada própria que reconstrói só o
+// modal preservando o foco/cursor da busca (ver refreshDetalheModal).
+function histToolbarHTML(todasLinhas,filterKey,searchKey,refreshCall){
+  refreshCall=refreshCall||'render()';
+  const counts={extra:0,ferias:0,folga:0};
+  todasLinhas.forEach(r=>{const t=diaTipo(r);if(counts[t]!==undefined)counts[t]++;});
+  const filtro=state[filterKey]||'todos';
+  const FILTERS=[['todos','Todos ('+todasLinhas.length+')'],['extra','⚡ Hora extra ('+counts.extra+')'],
+    ['ferias','🏖️ Férias ('+counts.ferias+')'],['folga','📅 Domingo/Feriado ('+counts.folga+')']];
+  const chips=FILTERS.map(([k,l])=>`<button class="chip ${filtro===k?'active':''}" onclick="state.${filterKey}='${k}';${refreshCall}">${l}</button>`).join('');
+  return `<div class="hist-toolbar">
+    <input id="${searchKey}" type="text" class="input" placeholder="Buscar por data (ex: 05/09)" value="${(state[searchKey]||'').replace(/"/g,'&quot;')}" oninput="state.${searchKey}=this.value;${refreshCall}">
+    <div class="chips" style="margin:0">${chips}</div>
+  </div>`;
+}
+function filtraLinhas(todasLinhas,filterKey,searchKey){
+  const filtro=state[filterKey]||'todos';
+  const q=(state[searchKey]||'').trim().toLowerCase();
+  return todasLinhas.filter(r=>{
+    if(filtro!=='todos'&&diaTipo(r)!==filtro)return false;
+    if(q&&!fmtd(r.data).toLowerCase().includes(q)&&!diaSemanaAbrev(r.data).toLowerCase().includes(q))return false;
+    return true;
+  });
+}
+
 function colabHistory(){
   const b=currentPeriod();
   const per=periodLabel(b);
@@ -2771,23 +2848,25 @@ function colabHistory(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
+  const linhasFiltradas=filtraLinhas(todasLinhas,'histFilterMy','histSearchMy');
+  const rows=linhasFiltradas.length
+    ? linhasFiltradas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
-        <td>${r.entrada}</td><td>${r.saida}</td>
-        <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+        <td data-th="Entrada">${r.entrada}</td><td data-th="Saída">${r.saida}</td>
+        <td data-th="Hora extra">${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td data-th="Janta">${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
-    : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
+    : `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:22px">${todasLinhas.length?'Nenhum dia corresponde ao filtro/busca.':'Nenhum registro de ponto no período ainda.'}</td></tr>`;
   return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
     `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>
      <button class="btn danger" onclick="fecharMeuPonto()">🔒 Fechar Meu Ponto</button>`)}
   <div class="card">
-    <div class="sub" style="margin-bottom:6px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
+    ${histResumoHTML(d,todasLinhas)}
+    ${histToolbarHTML(todasLinhas,'histFilterMy','histSearchMy')}
+    <div class="tbl-wrap hist-table"><table>
     <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Hora extra</th><th>Janta</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
@@ -3025,17 +3104,18 @@ function colabAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
+  const linhasFiltradas=filtraLinhas(todasLinhas,'histFilterAcomp','histSearchAcomp');
+  const rows=linhasFiltradas.length
+    ? linhasFiltradas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td data-th="Entrada">${r.entrada}</td><td data-th="Saída">${r.saida}</td><td data-th="Total">${r.total}</td><td data-th="Hora extra">${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td data-th="Janta">${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">${todasLinhas.length?'Nenhum dia corresponde ao filtro/busca.':'Nenhum ponto registrado neste período.'}</td></tr>`;
   return `${head('Acompanhar Ponto','Acompanhe todos os seus lançamentos, horas extras e jantas dentro do período.')}
   <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       <h3 style="margin:0">⚡ Meus pontos & Horas extras</h3>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn sm ghost" onclick="myAcompShift(-1)" title="Período anterior">‹</button>
@@ -3043,8 +3123,9 @@ function colabAcompanhar(){
         <button class="btn sm ghost" onclick="myAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
+    ${histResumoHTML(d,todasLinhas)}
+    ${histToolbarHTML(todasLinhas,'histFilterAcomp','histSearchAcomp')}
+    <div class="tbl-wrap hist-table"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px"><button class="btn sm ghost" onclick="verPonto('${state.user.nome.replace(/'/g,"")}')">👁️ Ver todos os lançamentos (com local e horário exatos)</button></div>
@@ -3066,7 +3147,7 @@ function colabPontosAnteriores(){
         <div style="display:flex;align-items:center;gap:8px">
           <span class="badge b-good">🔒 Fechado</span>
           ${d.extraTotalMin>0?`<span class="badge b-warn">⚡ +${d.extraTotal}</span>`:''}
-          <button class="btn sm ghost" onclick="verPontosAnterioresDetalhe('${k}')">👁️ Ver detalhes</button>
+          <button class="btn sm ghost" onclick="state.histFilterDetalhe='todos';state.histSearchDetalhe='';verPontosAnterioresDetalhe('${k}')">👁️ Ver detalhes</button>
           <button class="btn sm ghost" onclick="imprimirPonto('${nome.replace(/'/g,"")}',periodBoundsFromKey('${k}'))">🖨️ Imprimir</button>
         </div>
       </div>
@@ -3074,6 +3155,24 @@ function colabPontosAnteriores(){
   }).join(''):`<div class="card"><div style="color:var(--muted);text-align:center;padding:22px">Você ainda não tem períodos fechados. Assim que um período for encerrado, ele aparece aqui automaticamente.</div></div>`;
   return `${head('Pontos Anteriores','Consulte e imprima o espelho de qualquer período já fechado.')}
   ${rows}`;
+}
+// O modal (openModal) substitui só o #overlay — fora do ciclo normal de render(), que preserva
+// foco/cursor de inputs por id. Pra não perder o foco da busca a cada letra digitada ali dentro,
+// este wrapper guarda o estado do campo, reconstrói o modal e devolve o foco/seleção pro input novo.
+function refreshDetalheModal(k){
+  const id='histSearchDetalhe';
+  const el=document.getElementById(id);
+  const focused=!!el&&document.activeElement===el;
+  const selStart=(el&&typeof el.selectionStart==='number')?el.selectionStart:null;
+  const selEnd=(el&&typeof el.selectionEnd==='number')?el.selectionEnd:null;
+  verPontosAnterioresDetalhe(k);
+  if(focused){
+    const el2=document.getElementById(id);
+    if(el2){
+      el2.focus();
+      if(selStart!==null&&el2.setSelectionRange){try{el2.setSelectionRange(selStart,selEnd);}catch(e){}}
+    }
+  }
 }
 function verPontosAnterioresDetalhe(k){
   const nome=state.user.nome;
@@ -3100,18 +3199,20 @@ function verPontosAnterioresDetalhe(k){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
+  const linhasFiltradas=filtraLinhas(todasLinhas,'histFilterDetalhe','histSearchDetalhe');
+  const rows=linhasFiltradas.length
+    ? linhasFiltradas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td data-th="Entrada">${r.entrada}</td><td data-th="Saída">${r.saida}</td><td data-th="Total">${r.total}</td><td data-th="Hora extra">${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td data-th="Janta">${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">${todasLinhas.length?'Nenhum dia corresponde ao filtro/busca.':'Nenhum ponto registrado neste período.'}</td></tr>`;
   openModal({wide:true,content:`<div class="modal-head"><h3>🗂️ ${periodLabel(b)}</h3></div>
   <div class="modal-body">
-    <div class="sub" style="margin-bottom:10px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
+    ${histResumoHTML(d,todasLinhas)}
+    ${histToolbarHTML(todasLinhas,'histFilterDetalhe','histSearchDetalhe',`refreshDetalheModal('${k}')`)}
+    <div class="tbl-wrap hist-table"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
   </div>
@@ -3807,7 +3908,7 @@ function lancarPontoManual(){
 function setRegView(v){state.regView=v;if(v==='acompanhar'){state.acompEmp=null;state.acompRef=null;}render();}
 // Sempre que troca de colaborador (ou volta e escolhe outro), reinicia no período atual —
 // antes o período navegado (‹ ›) ficava "grudado" de uma visita anterior.
-function adminAcompSelect(nome){state.acompEmp=nome;state.acompRef=null;render();window.scrollTo(0,0);}
+function adminAcompSelect(nome){state.acompEmp=nome;state.acompRef=null;state.histFilterAdmin='todos';state.histSearchAdmin='';render();window.scrollTo(0,0);}
 function adminAcompBack(){state.acompEmp=null;state.acompRef=null;render();}
 function acompPeriodBounds(){const ref=state.acompRef||todayKey();return periodBounds(new Date(ref+'T12:00:00'));}
 function adminAcompShift(delta){
@@ -3901,14 +4002,15 @@ function adminRegAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
+  const linhasFiltradas=filtraLinhas(todasLinhas,'histFilterAdmin','histSearchAdmin');
+  const rows=linhasFiltradas.length
+    ? linhasFiltradas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td data-th="Entrada">${r.entrada}</td><td data-th="Saída">${r.saida}</td><td data-th="Total">${r.total}</td><td data-th="Hora extra">${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td data-th="Janta">${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
       }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">${todasLinhas.length?'Nenhum dia corresponde ao filtro/busca.':'Nenhum ponto registrado neste período.'}</td></tr>`;
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <button class="btn sm ghost" onclick="adminAcompBack()">‹ Voltar</button>
@@ -3920,8 +4022,9 @@ function adminRegAcompanhar(){
         <button class="btn sm ghost" onclick="adminAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
-    <div class="tbl-wrap"><table>
+    ${histResumoHTML(d,todasLinhas)}
+    ${histToolbarHTML(todasLinhas,'histFilterAdmin','histSearchAdmin')}
+    <div class="tbl-wrap hist-table"><table>
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">

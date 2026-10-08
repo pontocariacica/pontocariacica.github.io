@@ -249,12 +249,11 @@ tbody tr:hover{background:var(--surface-2)}
 .tbl-wrap{overflow-x:auto}
 
 /* ============================ REGISTRO DE PONTO ============================
-   Card hero escuro (gradiente índigo profundo) + cartão de trilha + botão cheio
-   quadrado abaixo — layout aprovado pelo administrador a partir de um protótipo
-   visual (ver captura "BOM DIA / Marina Alves" enviada pra referência): mesmas
-   informações de sempre (relógio, status, trilha entrada/saída, horas do dia),
-   só que mais vivo/atual e com cantos retos no botão principal e nos nós da
-   trilha, em vez de pílulas/círculos. */
+   Card hero escuro (gradiente índigo profundo) + cartão de trilha — mesmas
+   informações de sempre (relógio, status, trilha entrada/saída, horas do dia).
+   O card hero É o botão de registrar ponto (ver .punch-hero.ready/registrarPonto):
+   não existe mais um botão cheio separado embaixo da trilha, a pedido do
+   administrador — toca em qualquer lugar do card escuro pra registrar. */
 .punch-hero{background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%);
   border:none;border-radius:16px;padding:28px 26px;color:#fff;
   box-shadow:0 18px 40px rgba(30,27,75,.35);animation:pop .45s cubic-bezier(.2,.9,.3,1.2);
@@ -269,6 +268,14 @@ tbody tr:hover{background:var(--surface-2)}
 .punch-hero-foot{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   padding-top:16px;border-top:1px solid rgba(255,255,255,.18);font-size:12.5px;font-weight:600;color:rgba(255,255,255,.8)}
 .punch-hero-foot b{font-size:19px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+/* O próprio card virou o botão de registrar (antes era um botão cheio separado embaixo
+   da trilha — ver pedido do administrador: "quero que este [o card] seja o botão"). Só
+   fica clicável/com o brilho quando dá pra registrar (.ready); durante a obtenção da
+   localização ganha .loading (trava novo toque e some com cliques duplicados). */
+.punch-hero.ready{cursor:pointer;animation:ppBtnGlow 2.6s ease-in-out infinite}
+.punch-hero.ready:hover{transform:translateY(-2px);box-shadow:0 22px 44px rgba(30,27,75,.45)}
+.punch-hero.ready:active{transform:scale(.995)}
+.punch-hero.loading{pointer-events:none;opacity:.88}
 .next-badge{margin-top:16px;display:inline-flex;align-items:center;gap:10px;background:var(--surface-1);
   border:1px solid var(--border);border-radius:14px;padding:10px 16px;font-weight:700;transition:background .2s}
 .next-badge .pill{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(79,70,229,.2);animation:ppDotPulse 1.8s ease-in-out infinite}
@@ -291,21 +298,7 @@ tbody tr:hover{background:var(--surface-2)}
 .pr-lbl span{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1)}
 .pr-bar{flex:1;height:2px;background:var(--grid);margin:0 8px 27px;transition:background .3s}
 .pr-bar.filled{background:var(--green)}
-/* ===== Botão principal — largura total, cantos retos (sem nenhum arredondamento), logo
-   abaixo da trilha em vez de ao lado do relógio ===== */
-.punch-btn{width:100%;border:none;border-radius:0;padding:19px 22px;color:#fff;font-size:16px;font-weight:800;
-  text-transform:uppercase;letter-spacing:.4px;margin-top:16px;
-  background:linear-gradient(135deg,var(--babyblue),var(--blue) 45%,var(--blue-600));
-  box-shadow:0 14px 30px rgba(79,70,229,.35);
-  display:flex;align-items:center;gap:12px;transition:transform .15s,box-shadow .15s;cursor:pointer}
-.punch-btn:hover{transform:translateY(-2px);box-shadow:0 18px 38px rgba(79,70,229,.45)}
-.punch-btn:active{transform:scale(.995)}
-.punch-btn .big{font-size:22px;flex:0 0 auto}
-.punch-btn .lbl-wrap{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px}
-.punch-btn small{font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;opacity:.85}
-.punch-btn.done{background:#54597A;box-shadow:none;cursor:default}
-.punch-btn.ready{animation:ppBtnGlow 2.6s ease-in-out infinite}
-@keyframes ppBtnGlow{0%,100%{box-shadow:0 14px 30px rgba(79,70,229,.35)}50%{box-shadow:0 18px 40px rgba(79,70,229,.55)}}
+@keyframes ppBtnGlow{0%,100%{box-shadow:0 18px 40px rgba(30,27,75,.35)}50%{box-shadow:0 22px 48px rgba(30,27,75,.55)}}
 .timeline{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .tl-step{flex:1;min-width:120px;background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
 .tl-step.filled{border-color:var(--green);background:linear-gradient(135deg,rgba(22,163,74,.10),transparent)}
@@ -2040,7 +2033,7 @@ function alertPeriodoAberto(){
     </div></div>
   </div>
   <div class="modal-foot">
-    <button class="btn ghost" onclick="closeModal();registrarPonto(document.querySelector('.punch-btn'),true)">Registrar mesmo assim</button>
+    <button class="btn ghost" onclick="closeModal();registrarPonto(document.querySelector('.punch-hero'),true)">Registrar mesmo assim</button>
     <button class="btn primary" onclick="fecharPeriodoAnterior()">🔒 Fechar período anterior</button>
   </div>`});
 }
@@ -2316,7 +2309,14 @@ async function registrarPonto(btn,force){
   // Antes bloqueava o registro pedindo pro colaborador fechar o período anterior manualmente;
   // agora o sistema fecha sozinho (sem interromper o registro do ponto) e segue em frente.
   if(previousPeriodOpen())autoFecharPeriodoAnterior();
-  if(btn){btn.disabled=true;btn.querySelector('.lbl').textContent='Obtendo localização…';}
+  // btn aqui é o próprio card .punch-hero (não mais um <button> separado) — trava novo
+  // toque via classe (.loading tem pointer-events:none) e usa o texto do badge pra avisar
+  // que está buscando a localização, em vez do antigo .lbl do botão que não existe mais.
+  if(btn){
+    btn.classList.add('loading');
+    const lbl=btn.querySelector('#punchBadgeTxt')||btn.querySelector('.lbl');
+    if(lbl)lbl.textContent='Obtendo localização…';
+  }
   try{
     const geo=await getGeo();
     const now=new Date();
@@ -2360,7 +2360,7 @@ async function registrarPonto(btn,force){
     saveNow();render();
   }catch(err){
     toast('Erro ao registrar',typeof err==='string'?err:'Falha na localização.','err');
-    if(btn){btn.disabled=false;render();}
+    if(btn){btn.classList.remove('loading');render();}
   }
 }
 function showSuccess(title,msg,celebrate){
@@ -2546,25 +2546,25 @@ function punchHero(){
     const bar=i<SCHED.length-1?`<div class="pr-bar ${filled?'filled':''}"></div>`:'';
     return node+bar;
   }).join('');
-  const btnLabel = blocked?(bloq.motivo==='feriado'?'Feriado bloqueado':bloq.motivo==='ferias'?'Em férias':'Domingo bloqueado') : next?('Registrar '+SCHED_LABEL[next]):'Jornada concluída';
   const statusCls = blocked?'blocked':(!next?'ok':'');
   const statusTxt = next&&!blocked?('Próximo: '+SCHED_LABEL[next]):blocked?'Registro bloqueado':'Todos os pontos registrados ✅';
-  const subtitle = blocked?(bloq.motivo==='ferias'?'Aproveite suas férias! 🏖️':'Solicite liberação ao admin'):next?'Toque para registrar com sua localização':'Bom trabalho hoje!';
-  return `<div class="punch-hero">
+  // O card inteiro é o botão de registrar (pedido do administrador: só um botão, o card
+  // grande, em vez do card + um botão cheio separado embaixo da trilha). Só fica clicável
+  // (.ready, com o brilho) quando há próximo passo e nada está bloqueado; nesse caso o
+  // onclick chama registrarPonto(this) direto no card — registrarPonto atualiza o texto do
+  // badge pra "Obtendo localização…" via #punchBadgeTxt enquanto busca o GPS.
+  const tappable = next && !blocked;
+  return `<div class="punch-hero${tappable?' ready':''}"${tappable?' onclick="registrarPonto(this)" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();registrarPonto(this)}"':''}>
     <div class="punch-hero-top">
       <div>
         <div class="punch-clock" id="punchClock">--:--:--</div>
         <div class="punch-date">${dateStr}</div>
       </div>
-      <div class="next-badge ${statusCls}"><span class="pill"></span> ${statusTxt}</div>
+      <div class="next-badge ${statusCls}"><span class="pill"></span> <span id="punchBadgeTxt">${statusTxt}</span></div>
     </div>
     <div class="punch-hero-foot"><span>Horas trabalhadas hoje</span><b id="punchHorasHoje">${horasHoje}</b></div>
   </div>
-  <div class="punch-rail-card"><div class="punch-rail">${rail}</div></div>
-  <button class="punch-btn ${(!next||blocked)?'done':'ready'}" ${(!next||blocked)?'disabled':''} onclick="registrarPonto(this)">
-    <span class="big">${blocked?'🚫':next?'⏱️':'✅'}</span>
-    <span class="lbl-wrap"><span class="lbl">${btnLabel}</span><small>${subtitle}</small></span>
-  </button>`;
+  <div class="punch-rail-card"><div class="punch-rail">${rail}</div></div>`;
 }
 function colabDashboard(){
   const t=myDayObj();

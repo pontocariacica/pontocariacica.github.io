@@ -2615,11 +2615,20 @@ function gprowShell(emp,badgeHTML,dim){
 // feriasDe() aqui também (além do status manual) resolve isso sem depender de ninguém lembrar
 // de mudar o status à mão.
 const emFeriasHoje=emp=>emp.status==='ferias'||!!feriasDe(emp.nome,todayKey());
+// Hoje é domingo ou feriado (mesmo critério de isDescanso em jornadaInfoFor, sem olhar liberado —
+// aqui é só pra decidir o badge exibido, não pra calcular hora extra). Usado pra quem está de
+// férias não cair sempre em "Em férias": em domingo/feriado o visual precisa ficar igual ao dos
+// demais colaboradores ("Folga hoje"), já que ninguém bate ponto nesses dias de qualquer forma —
+// pedido do administrador.
+const hojeEhDescanso=()=>new Date().getDay()===0||!!feriadoDe(todayKey());
 // j vem pré-calculado (jornadaInfoFor) pra quem já bate ponto normalmente — fica null pra quem
 // está inativo/de férias/atestado, casos em que não faz sentido nenhum mostrar andamento do dia.
 function collabProgressRow(emp,j){
   if(emp.status==='inativo')return gprowShell(emp,'<span class="badge b-mut">Inativo</span>',true);
-  if(emFeriasHoje(emp))return gprowShell(emp,'<span class="badge b-info">🏖️ Em férias</span>');
+  if(emFeriasHoje(emp)){
+    if(hojeEhDescanso())return gprowShell(emp,'<span class="badge b-mut">Folga hoje</span>');
+    return gprowShell(emp,'<span class="badge b-info">🏖️ Em férias</span>');
+  }
   if(emp.status==='atestado')return gprowShell(emp,'<span class="badge b-warn">🩺 Atestado</span>');
   if(j.isDescanso&&!j.temEntrada)return gprowShell(emp,'<span class="badge b-mut">Folga hoje</span>');
   const idp='gp'+emp.id;
@@ -2930,12 +2939,18 @@ function collectPonto(empName,keep){
   // como férias (na folha, na impressão e no histórico), em vez de ficarem em branco. Só marca o
   // dia como férias quando NÃO há nenhum registro real batido nele — se por algum motivo houver
   // um ponto no meio do período de férias, ele continua aparecendo normalmente, sem esconder nada.
+  // EXCETO domingo/feriado dentro do período: esses dias ficam de fora daqui (sem marcar
+  // ferias=true), pra que caiam no mesmo preenchimento de lacuna que espelhoSection/colabHistory/
+  // colabAcompanhar/etc. já fazem pra todo mundo (linha preta "Domingo" ou vermelha "Folga —
+  // Feriado") — pedido do administrador: o visual de domingo/feriado de quem está de férias deve
+  // ficar igual ao dos demais colaboradores, não tudo achatado como "Férias".
   (state.vacations||[]).filter(v=>v.emp===empName&&(v.status==='agendada'||v.status==='concluída')&&v.ini&&v.fim).forEach(v=>{
     let cur=new Date(v.ini+'T12:00:00');
     const fim=new Date(v.fim+'T12:00:00');
     while(cur<=fim){
       const dk=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
-      if(dk<=tkMax&&keep(dk)&&!days[dk])ensure(dk).ferias=true;
+      const ehDescanso=cur.getDay()===0||!!feriadoDe(dk);
+      if(dk<=tkMax&&keep(dk)&&!days[dk]&&!ehDescanso)ensure(dk).ferias=true;
       cur.setDate(cur.getDate()+1);
     }
   });

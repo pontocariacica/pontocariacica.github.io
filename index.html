@@ -248,23 +248,64 @@ tbody tr:hover{background:var(--surface-2)}
 .uname b{font-size:13.5px}.uname small{color:var(--muted);font-size:11.5px;display:block}
 .tbl-wrap{overflow-x:auto}
 
-/* ============================ REGISTRO DE PONTO ============================ */
-.punch-hero{background:linear-gradient(135deg,rgba(79,70,229,.16),rgba(129,140,248,.12));
-  border:1px solid var(--border);border-radius:22px;padding:26px;display:grid;
-  grid-template-columns:1.1fr 1fr;gap:26px;align-items:center}
-.punch-clock{font-size:52px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
-.punch-date{color:var(--text-2);font-size:15px;text-transform:capitalize;margin-top:2px}
+/* ============================ REGISTRO DE PONTO ============================
+   Card hero escuro (gradiente índigo profundo) + cartão de trilha + botão cheio
+   quadrado abaixo — layout aprovado pelo administrador a partir de um protótipo
+   visual (ver captura "BOM DIA / Marina Alves" enviada pra referência): mesmas
+   informações de sempre (relógio, status, trilha entrada/saída, horas do dia),
+   só que mais vivo/atual e com cantos retos no botão principal e nos nós da
+   trilha, em vez de pílulas/círculos. */
+.punch-hero{background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%);
+  border:none;border-radius:16px;padding:28px 26px;color:#fff;
+  box-shadow:0 18px 40px rgba(30,27,75,.35);animation:pop .45s cubic-bezier(.2,.9,.3,1.2);
+  display:flex;flex-direction:column;gap:18px}
+.punch-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.punch-clock{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1;color:#fff}
+.punch-date{color:rgba(255,255,255,.78);font-size:11.5px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-top:6px}
+.punch-hero .next-badge{margin-top:0;background:rgba(255,255,255,.16);border:none;border-radius:7px;
+  padding:7px 13px;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:#fff}
+.punch-hero .next-badge.ok{background:rgba(255,255,255,.24)}
+.punch-hero .next-badge.blocked{background:rgba(225,29,72,.38)}
+.punch-hero-foot{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding-top:16px;border-top:1px solid rgba(255,255,255,.18);font-size:12.5px;font-weight:600;color:rgba(255,255,255,.8)}
+.punch-hero-foot b{font-size:19px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
 .next-badge{margin-top:16px;display:inline-flex;align-items:center;gap:10px;background:var(--surface-1);
-  border:1px solid var(--border);border-radius:14px;padding:10px 16px;font-weight:700}
-.next-badge .pill{width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(79,70,229,.2)}
-.punch-btn{width:100%;aspect-ratio:1/.62;border:none;border-radius:20px;color:#fff;font-size:22px;font-weight:800;
+  border:1px solid var(--border);border-radius:14px;padding:10px 16px;font-weight:700;transition:background .2s}
+.next-badge .pill{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(79,70,229,.2);animation:ppDotPulse 1.8s ease-in-out infinite}
+.next-badge.ok .pill{background:var(--green)}
+.next-badge.blocked .pill{background:#fff}
+@keyframes ppDotPulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* ===== Cartão branco com a trilha de progresso Entrada→Saída (nós quadrados, não mais
+   caixas .timeline/.tl-step lado a lado — essas continuam existindo, usadas em outras
+   telas, ex. os blocos "Hora extra hoje"/"Janta hoje" em jornadaCard) ===== */
+.punch-rail-card{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:16px}
+.punch-rail{display:flex;align-items:center}
+.pr-step{display:flex;flex-direction:column;align-items:center;gap:7px;flex:0 0 auto}
+.pr-dot{width:30px;height:30px;border-radius:8px;background:var(--surface-2);border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;color:var(--muted);transition:.25s}
+.pr-step.done .pr-dot{background:var(--green);border-color:var(--green);color:#fff}
+.pr-step.next .pr-dot{border-color:var(--blue);color:var(--blue);box-shadow:0 0 0 4px rgba(79,70,229,.16)}
+.pr-step.blocked .pr-dot{border-color:var(--s-crit);color:var(--s-crit)}
+.pr-lbl{text-align:center}
+.pr-lbl b{display:block;font-size:10.5px;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.pr-lbl span{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1)}
+.pr-bar{flex:1;height:2px;background:var(--grid);margin:0 8px 27px;transition:background .3s}
+.pr-bar.filled{background:var(--green)}
+/* ===== Botão principal — largura total, cantos retos (sem nenhum arredondamento), logo
+   abaixo da trilha em vez de ao lado do relógio ===== */
+.punch-btn{width:100%;border:none;border-radius:0;padding:19px 22px;color:#fff;font-size:16px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.4px;margin-top:16px;
   background:linear-gradient(135deg,var(--babyblue),var(--blue) 45%,var(--blue-600));
-  box-shadow:0 14px 34px rgba(79,70,229,.4),inset 0 2px 0 rgba(255,255,255,.28);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:transform .15s,box-shadow .15s;position:relative;overflow:hidden}
-.punch-btn:hover{transform:translateY(-2px);box-shadow:0 20px 48px rgba(79,70,229,.5),inset 0 2px 0 rgba(255,255,255,.28)}
-.punch-btn:active{transform:scale(.98)}
-.punch-btn .big{font-size:40px}
-.punch-btn.done{background:linear-gradient(135deg,#7c8ba1,#475569);box-shadow:none}
+  box-shadow:0 14px 30px rgba(79,70,229,.35);
+  display:flex;align-items:center;gap:12px;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.punch-btn:hover{transform:translateY(-2px);box-shadow:0 18px 38px rgba(79,70,229,.45)}
+.punch-btn:active{transform:scale(.995)}
+.punch-btn .big{font-size:22px;flex:0 0 auto}
+.punch-btn .lbl-wrap{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px}
+.punch-btn small{font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;opacity:.85}
+.punch-btn.done{background:#54597A;box-shadow:none;cursor:default}
+.punch-btn.ready{animation:ppBtnGlow 2.6s ease-in-out infinite}
+@keyframes ppBtnGlow{0%,100%{box-shadow:0 14px 30px rgba(79,70,229,.35)}50%{box-shadow:0 18px 40px rgba(79,70,229,.55)}}
 .timeline{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .tl-step{flex:1;min-width:120px;background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
 .tl-step.filled{border-color:var(--green);background:linear-gradient(135deg,rgba(22,163,74,.10),transparent)}
@@ -2462,30 +2503,44 @@ function render(){
 function punchHero(){
   const t=myDayObj();
   const next=nextPunch();
-  const done=SCHED.filter(s=>t[s]).length;
-  const pct=Math.round(done/SCHED.length*100);
   const now=new Date();
-  const dateStr=now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const dateStr=now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
   const dow=now.getDay();
   const bloq=registroBloqueado(todayKey(),dow);
   const blocked=!!bloq;
-  const steps=SCHED.map(s=>`<div class="tl-step ${t[s]?'filled':''}"><div class="k">${SCHED_LABEL[s]}</div><div class="t">${t[s]?t[s].time:'--:--'}</div></div>`).join('');
+  const horasHoje=fmtMin(jornadaInfo().trabMin);
+  // Trilha de progresso: cada etapa de SCHED vira um "nó" quadrado (concluído/próximo/pendente)
+  // ligado por uma barrinha que preenche de verde conforme os pontos vão sendo batidos — mesma
+  // informação de sempre (horário de cada registro), só que como trilha em vez do antigo par de
+  // caixas lado a lado (.timeline/.tl-step, que continua existindo e sendo usado em outras telas).
+  const rail=SCHED.map((s,i)=>{
+    const filled=!!t[s];
+    const isNext=!filled&&s===next&&!blocked;
+    const cls=filled?'done':(isNext?'next':(blocked?'blocked':''));
+    const node=`<div class="pr-step ${cls}"><span class="pr-dot">${filled?'✓':(i+1)}</span>
+      <div class="pr-lbl"><b>${SCHED_LABEL[s]}</b><span>${filled?t[s].time:'--:--'}</span></div></div>`;
+    const bar=i<SCHED.length-1?`<div class="pr-bar ${filled?'filled':''}"></div>`:'';
+    return node+bar;
+  }).join('');
   const btnLabel = blocked?(bloq.motivo==='feriado'?'Feriado bloqueado':bloq.motivo==='ferias'?'Em férias':'Domingo bloqueado') : next?('Registrar '+SCHED_LABEL[next]):'Jornada concluída';
+  const statusCls = blocked?'blocked':(!next?'ok':'');
+  const statusTxt = next&&!blocked?('Próximo: '+SCHED_LABEL[next]):blocked?'Registro bloqueado':'Todos os pontos registrados ✅';
+  const subtitle = blocked?(bloq.motivo==='ferias'?'Aproveite suas férias! 🏖️':'Solicite liberação ao admin'):next?'Toque para registrar com sua localização':'Bom trabalho hoje!';
   return `<div class="punch-hero">
-    <div>
-      <div class="punch-clock" id="punchClock">--:--:--</div>
-      <div class="punch-date">${dateStr}</div>
-      <div class="next-badge"><span class="pill"></span> ${next&&!blocked?('Próximo: '+SCHED_LABEL[next]):blocked?'Registro bloqueado':'Todos os pontos registrados ✅'}</div>
-      <div class="timeline">${steps}</div>
+    <div class="punch-hero-top">
+      <div>
+        <div class="punch-clock" id="punchClock">--:--:--</div>
+        <div class="punch-date">${dateStr}</div>
+      </div>
+      <div class="next-badge ${statusCls}"><span class="pill"></span> ${statusTxt}</div>
     </div>
-    <div>
-      <button class="punch-btn ${(!next||blocked)?'done':''}" ${(!next||blocked)?'disabled':''} onclick="registrarPonto(this)">
-        <span class="big">${blocked?'🚫':next?'⏱️':'✅'}</span>
-        <span class="lbl">${btnLabel}</span>
-        <small style="font-weight:600;opacity:.9;font-size:13px">${blocked?(bloq.motivo==='ferias'?'Aproveite suas férias! 🏖️':'Solicite liberação ao admin'):next?'Toque para registrar com sua localização':'Bom trabalho hoje!'}</small>
-      </button>
-    </div>
-  </div>`;
+    <div class="punch-hero-foot"><span>Horas trabalhadas hoje</span><b id="punchHorasHoje">${horasHoje}</b></div>
+  </div>
+  <div class="punch-rail-card"><div class="punch-rail">${rail}</div></div>
+  <button class="punch-btn ${(!next||blocked)?'done':'ready'}" ${(!next||blocked)?'disabled':''} onclick="registrarPonto(this)">
+    <span class="big">${blocked?'🚫':next?'⏱️':'✅'}</span>
+    <span class="lbl-wrap"><span class="lbl">${btnLabel}</span><small>${subtitle}</small></span>
+  </button>`;
 }
 function colabDashboard(){
   const t=myDayObj();

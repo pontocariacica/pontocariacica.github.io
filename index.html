@@ -248,30 +248,6 @@ tbody tr:hover{background:var(--surface-2)}
 .uname b{font-size:13.5px}.uname small{color:var(--muted);font-size:11.5px;display:block}
 .tbl-wrap{overflow-x:auto}
 
-/* ============================ CARTÕES DE DIA (histórico) ============================ */
-.day-cards{display:flex;flex-direction:column;gap:9px}
-.day-card{display:flex;align-items:center;gap:16px;padding:13px 16px;border-radius:14px;
-  border:1px solid var(--border);border-left:4px solid var(--border);background:var(--surface-2);
-  flex-wrap:wrap;transition:border-color .15s ease}
-.day-card:hover{border-color:var(--ring)}
-.day-card .dc-date{flex:0 0 58px}
-.day-card .dc-date b{display:block;font-size:14px;color:var(--text-1)}
-.day-card .dc-date small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
-.day-card .dc-mid{flex:1;min-width:170px;display:flex;gap:22px;flex-wrap:wrap;align-items:center}
-.day-card .dcv{display:flex;flex-direction:column;min-width:44px}
-.day-card .dcv b{font-size:13.5px;color:var(--text-1);font-variant-numeric:tabular-nums}
-.day-card .dcv small{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
-.day-card .dc-right{flex:0 0 auto;display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
-.day-card .dc-off-label{color:var(--text-2);font-weight:600;font-size:13px}
-.day-card.dc-domingo{border-left-color:#13162B}
-.day-card.dc-feriado{border-left-color:var(--s-crit)}
-.day-card.dc-ferias{border-left-color:#f3b23a}
-@media(max-width:560px){
-  .day-card{gap:10px;padding:12px}
-  .day-card .dc-mid{gap:14px}
-  .day-card .dc-right{width:100%;margin-left:0;justify-content:flex-start}
-}
-
 /* ============================ REGISTRO DE PONTO ============================ */
 .punch-hero{background:linear-gradient(135deg,rgba(79,70,229,.16),rgba(129,140,248,.12));
   border:1px solid var(--border);border-radius:22px;padding:26px;display:grid;
@@ -337,19 +313,13 @@ html[data-theme="dark"] .jbar-extra{color:#FBBF24}
 .gprow-meta{display:flex;justify-content:space-between;align-items:center;margin-top:0;font-size:12px;gap:8px}
 .gprow-meta .mono{font-variant-numeric:tabular-nums;color:var(--text-2);font-weight:700;white-space:nowrap}
 .gprow-meta .mono small{font-weight:500;color:var(--muted)}
-/* Uma "hora grande" por hora de jornada, cada uma com 6 barrinhas pequenas (10min cada) — ver
-   segTrackHTML. A barrinha atual (em andamento) enche proporcionalmente via --p (custom
-   property, 0 a 100%); as completas ficam com --p:100% e as futuras com --p:0%. Cor normal
-   (azul) até a jornada prevista terminar, cor de hora extra (laranja/amarelo) dali em diante —
-   o corte de cor acontece na barrinha certa, minuto a minuto, não só quando a hora inteira vira. */
-.gseg-track{display:flex;gap:3px;height:14px}
-.gseg-hour{flex:1;display:flex;gap:1.5px;min-width:0}
-.gseg-hour+.gseg-hour{margin-left:2px}
-.gseg-tick{flex:1;min-width:2px;height:100%;border-radius:2px;background:var(--border);
-  box-shadow:inset 0 1px 2px rgba(11,15,25,.10);
-  background-image:linear-gradient(90deg,var(--blue) var(--p,0%),transparent var(--p,0%));
-  transition:background-image .3s linear}
-.gseg-tick.extra{background-image:linear-gradient(90deg,var(--s-warn) var(--p,0%),transparent var(--p,0%))}
+/* A barra de cada colaborador no painel do Admin usa o mesmo componente .jbar-track/.jbar-fill
+   da tela "Jornada em andamento" do próprio colaborador (ver jornadaCard) — mesma barra em
+   pílula com gradiente e o percentual dentro/fora, só que compacta (18px) pra caber em cada
+   cartão da grade. Ver gaugeBarHTML/jBarState. */
+.gprow-bar .jbar-track{height:18px}
+.gprow-bar .jbar-fill b{font-size:10.5px}
+.gprow-bar .jbar-pct-out{font-size:10.5px;right:8px}
 @media (max-width:560px){
   #gpList{grid-template-columns:1fr}
 }
@@ -2607,39 +2577,19 @@ function jornadaCard(){
 }
 
 /* ===== Andamento do dia de todos os colaboradores (Painel do Admin) =====
-   Pedido do Admin: em vez de uma barra contínua com uma marca indicando onde a hora extra começa,
-   mostrar em barrinhas — uma "hora grande" pra cada hora de jornada, e dentro de cada uma, 6
-   barrinhas pequenas (10 minutos cada). A cor muda de normal pra hora extra exatamente na
-   barrinha em que a jornada prevista termina (minuto a minuto, não só quando a hora inteira
-   vira — ver segTrackHTML), então o corte fica no lugar certo mesmo quando a jornada não é um
-   número redondo de horas (ex.: 06:30–10:30). A barrinha em andamento agora mesmo enche aos
-   poucos (proporcional aos segundos already passados dela), em vez de pular de uma vez a cada
-   10 minutos — atualizado a cada segundo por updateAdminProgressLive.
+   Usa o mesmo componente de barra da tela "Jornada em andamento" do colaborador (jornadaCard,
+   .jbar-track/.jbar-fill) — barra em pílula com gradiente azul->verde, vira laranja/amarela
+   quando entra em hora extra (ver jBarState), com o percentual mostrado dentro ou fora da barra
+   dependendo do quanto já encheu. Só o tamanho é reduzido (.gprow-bar .jbar-track) pra caber no
+   cartão compacto da grade. Atualizada ao vivo a cada segundo por updateAdminProgressLive, igual
+   à barra do colaborador em tick().
 */
-function segTrackHTML(j){
-  const previstaMin=j.previstaMin||0, trabMin=j.trabMin||0;
-  // Nunca menos que 1h de "trilho" (início do dia, ninguém bateu ponto ainda) — sempre pelo menos
-  // o suficiente pra cobrir a jornada prevista inteira e o que já foi trabalhado (hora extra
-  // incluída, pra a barra crescer sozinha se passar da jornada).
-  const totalMin=Math.max(previstaMin,trabMin,60);
-  const totalH=Math.ceil(totalMin/60);
-  let html='';
-  for(let h=0;h<totalH;h++){
-    html+='<div class="gseg-hour">';
-    for(let t=0;t<6;t++){
-      const inicioMin=h*60+t*10;
-      // Sem jornada prevista (domingo/feriado liberado) — tudo que for trabalhado conta como
-      // hora extra desde o primeiro minuto, igual o comportamento anterior.
-      const extra=previstaMin>0?(inicioMin>=previstaMin):true;
-      const pct=Math.max(0,Math.min(100,Math.round((trabMin-inicioMin)/10*100)));
-      html+=`<div class="gseg-tick${extra?' extra':''}" style="--p:${pct}%"></div>`;
-    }
-    html+='</div>';
-  }
-  return html;
-}
 function gaugeBarHTML(j,idp){
-  return `<div class="gseg-track" id="${idp}Track">${segTrackHTML(j)}</div>`;
+  const barSt=jBarState(j);
+  return `<div class="jbar-track" id="${idp}Track">
+    <div class="jbar-fill${barSt?' '+barSt:''}" id="${idp}Fill" style="width:${j.pct}%"><b id="${idp}PctIn" style="display:${j.pct>=25?'inline':'none'}">${j.pct}%</b></div>
+    <b id="${idp}PctOut" class="jbar-pct-out" style="display:${j.pct<25?'inline':'none'}">${j.pct}%</b>
+  </div>`;
 }
 function empStatusBadgeHTML(j){
   if(!j.temEntrada)return '<span class="badge b-mut">Não bateu ponto ainda</span>';
@@ -2703,10 +2653,12 @@ function updateAdminProgressLive(){
     const trackEl=document.getElementById(idp+'Track');
     if(!trackEl)return; // linha "Folga hoje" (sem barra) ou funcionário novo ainda não renderizado
     const j=jornadaInfoFor(emp);
-    // Regenera as barrinhas inteiras a cada segundo (em vez de tentar atualizar cada uma
-    // individualmente) — o número de "horas grandes" pode crescer ao vivo (hora extra começando
-    // agora mesmo), então é mais simples e igualmente barato refazer o HTML todo do trilho.
-    trackEl.innerHTML=segTrackHTML(j);
+    const fillEl=document.getElementById(idp+'Fill');
+    if(fillEl){fillEl.style.width=j.pct+'%';fillEl.className='jbar-fill'+(jBarState(j)?' '+jBarState(j):'');}
+    const pctIn=document.getElementById(idp+'PctIn');
+    if(pctIn){pctIn.textContent=j.pct+'%';pctIn.style.display=j.pct>=25?'inline':'none';}
+    const pctOut=document.getElementById(idp+'PctOut');
+    if(pctOut){pctOut.textContent=j.pct+'%';pctOut.style.display=j.pct<25?'inline':'none';}
     const timeEl=document.getElementById(idp+'Time');
     if(timeEl)timeEl.innerHTML=fmtMin(j.trabMin)+' <small>de '+fmtMin(j.previstaMin)+'</small>';
     const statusEl=document.getElementById(idp+'Status');
@@ -2791,38 +2743,6 @@ function colabPunch(){
 const flowItem=(n,t,s,c)=>`<div class="mini-item"><div class="ic" style="background:${c}22;color:${c};font-weight:800">${n}</div>
   <div class="txt"><b>${t}</b><small>${s}</small></div></div>`;
 
-function diaCardHTML(r,withTotal){
-  if(r.ferias)return `<div class="day-card dc-ferias">
-    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
-    <div class="dc-mid"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></div>
-  </div>`;
-  if(r.domingo)return `<div class="day-card dc-domingo">
-    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
-    <div class="dc-mid"><span class="dc-off-label">Domingo</span></div>
-  </div>`;
-  if(r.feriado)return `<div class="day-card dc-feriado">
-    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
-    <div class="dc-mid"><span class="badge b-crit">Folga — Feriado: ${r.feriado}</span></div>
-  </div>`;
-  return `<div class="day-card">
-    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
-    <div class="dc-mid">
-      <div class="dcv"><b>${r.entrada}</b><small>Entrada</small></div>
-      <div class="dcv"><b>${r.saida}</b><small>Saída</small></div>
-      ${withTotal?`<div class="dcv"><b>${r.total}</b><small>Total</small></div>`:''}
-    </div>
-    <div class="dc-right">
-      ${r.ajustado?'<span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}
-      ${r.extraMin>0?`<span class="badge b-warn">⚡ +${r.extra}</span>`:''}
-      ${r.janta?'<span class="badge b-good">🍽️ Janta</span>':''}
-    </div>
-  </div>`;
-}
-function diaCardsWrapHTML(rows,emptyMsg,withTotal){
-  return rows.length
-    ? `<div class="day-cards">${rows.map(r=>diaCardHTML(r,withTotal)).join('')}</div>`
-    : `<div style="color:var(--muted);text-align:center;padding:22px">${emptyMsg}</div>`;
-}
 function colabHistory(){
   const b=currentPeriod();
   const per=periodLabel(b);
@@ -2851,14 +2771,25 @@ function colabHistory(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum registro de ponto no período ainda.',false);
+  const rows=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
+        <td>${r.entrada}</td><td>${r.saida}</td>
+        <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
   return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
     `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>
      <button class="btn danger" onclick="fecharMeuPonto()">🔒 Fechar Meu Ponto</button>`)}
   <div class="card">
-    <div class="sub" style="margin-bottom:12px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    ${rows}
-  </div>`;
+    <div class="sub" style="margin-bottom:6px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    <div class="tbl-wrap"><table>
+    <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Hora extra</th><th>Janta</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
 }
 function fecharMeuPonto(){
   const b=currentPeriod();
@@ -3094,7 +3025,14 @@ function colabAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
+  const rows=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   return `${head('Acompanhar Ponto','Acompanhe todos os seus lançamentos, horas extras e jantas dentro do período.')}
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
@@ -3105,8 +3043,10 @@ function colabAcompanhar(){
         <button class="btn sm ghost" onclick="myAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub" style="margin-bottom:12px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    ${rows}
+    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px"><button class="btn sm ghost" onclick="verPonto('${state.user.nome.replace(/'/g,"")}')">👁️ Ver todos os lançamentos (com local e horário exatos)</button></div>
   </div>`;
 }
@@ -3160,11 +3100,20 @@ function verPontosAnterioresDetalhe(k){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
+  const rows=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   openModal({wide:true,content:`<div class="modal-head"><h3>🗂️ ${periodLabel(b)}</h3></div>
   <div class="modal-body">
     <div class="sub" style="margin-bottom:10px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    ${rows}
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
   </div>
   <div class="modal-foot">
     <button class="btn ghost" onclick="closeModal()">Fechar</button>
@@ -3952,7 +3901,14 @@ function adminRegAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
+  const rows=todasLinhas.length
+    ? todasLinhas.map(r=>{
+        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
+        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <button class="btn sm ghost" onclick="adminAcompBack()">‹ Voltar</button>
@@ -3964,8 +3920,10 @@ function adminRegAcompanhar(){
         <button class="btn sm ghost" onclick="adminAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub" style="margin-bottom:12px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
-    ${rows}
+    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm ghost" onclick="verPonto('${state.acompEmp.replace(/'/g,"")}')">👁️ Ver detalhes</button>
       <button class="btn sm primary" onclick="imprimirPonto('${state.acompEmp.replace(/'/g,"")}',periodBoundsFromKey('${periodKey(b)}'))">🖨️ Imprimir espelho</button>

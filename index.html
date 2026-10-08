@@ -197,8 +197,8 @@ a{color:var(--blue);text-decoration:none}
 .page-head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 
 /* ===== Resumo em destaque do Dashboard ("Hoje em números") ===== */
-.dash-hero{background:linear-gradient(135deg,var(--babyblue),var(--blue) 55%,var(--blue-600));
-  border-radius:20px;padding:24px 26px;color:#fff;box-shadow:0 14px 34px rgba(79,70,229,.3);margin-bottom:16px}
+.dash-hero{background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%);
+  border-radius:16px;padding:24px 26px;color:#fff;box-shadow:0 18px 40px rgba(30,27,75,.35);margin-bottom:16px}
 .dash-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .dash-hero-date{font-size:13px;opacity:.85;text-transform:capitalize;font-weight:700;letter-spacing:.2px}
 .dash-hero-top h2{margin:3px 0 0;font-size:23px}
@@ -339,6 +339,30 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
 .jbar-marks{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);font-weight:600}
 .jbar-extra{margin-top:9px;font-size:12px;font-weight:700;color:#a06a00;display:flex;align-items:center;gap:5px}
 html[data-theme="dark"] .jbar-extra{color:#FBBF24}
+
+/* ===== "Jornada em andamento" do Início do colaborador — mesmo tratamento escuro/vivo do
+   punch-hero (Registrar Ponto), mas com acento próprio: âmbar pra hora extra, verde-menta pra
+   janta, em vez de reaproveitar as cores claras padrão de .next-badge/.tl-step/.jbar-track.
+   Sempre escuro (não depende do tema claro/escuro do site, igual ao punch-hero), por isso usa
+   branco translúcido em vez de var(--muted)/var(--border), que mudam com o tema. */
+.jornada-hero{background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%);border:none;
+  box-shadow:0 18px 40px rgba(30,27,75,.35)}
+.jornada-hero .next-badge{background:rgba(255,255,255,.16);border:none;border-radius:7px;color:#fff}
+.jornada-hero .next-badge .pill{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.18)}
+.jornada-hero .jbar-time{color:#fff}
+.jornada-hero .jbar-time small{color:rgba(255,255,255,.65)}
+.jornada-hero .jbar-track{background:rgba(255,255,255,.16);box-shadow:inset 0 1px 2px rgba(0,0,0,.3)}
+.jornada-hero .jbar-marks{color:rgba(255,255,255,.6)}
+.jornada-hero .jbar-pct-out{color:rgba(255,255,255,.88)}
+.jornada-hero .jbar-extra{color:#FDE68A}
+.jornada-hero .tl-step{border-radius:0;border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.07)}
+.jornada-hero .tl-step .k{color:rgba(255,255,255,.72)}
+.jornada-hero .tl-step .t{color:#fff}
+.jornada-hero .tl-step.extra{border-color:rgba(251,191,36,.55);background:rgba(245,158,11,.22)}
+.jornada-hero .tl-step.extra .t{color:#FDE68A}
+.jornada-hero .tl-step.janta{border-color:rgba(45,212,191,.5);background:rgba(20,184,166,.18)}
+.jornada-hero .tl-step.janta .t{color:#5EEAD4}
+.jornada-hero .jornada-foot{color:rgba(255,255,255,.68)}
 
 /* ===== Andamento do dia de todos os colaboradores (Painel do Admin) ===== */
 /* Grade de cartões — um por colaborador — em vez da lista de linhas empilhadas de antes. */
@@ -2609,7 +2633,7 @@ function jornadaCard(){
   const t=myDayObj();
   const jantou=!!(t.saida&&t.saida.time>'18:59');
   const barSt=jBarState(j);
-  return `<div class="card" style="background:linear-gradient(135deg,rgba(79,70,229,.10),rgba(129,140,248,.06))">
+  return `<div class="card jornada-hero">
     <div class="next-badge" id="jStatus" style="margin:0 0 16px"><span class="pill"></span> Jornada em andamento</div>
     <div class="jbar-row">
       <div class="jbar-time" id="jBarTime">${fmtMin(j.trabMin)} <small>de ${fmtMin(j.previstaMin)}</small></div>
@@ -2621,12 +2645,12 @@ function jornadaCard(){
     <div class="jbar-marks"><span>${j.ini}</span><span>${j.fim}</span></div>
     <div class="jbar-extra" id="jBarExtra" style="display:${j.extraMin>0?'flex':'none'}">⚡ +${fmtMin(j.extraMin)} além da jornada</div>
     <div class="grid g-2" style="gap:14px;margin-top:14px">
-      <div class="tl-step filled" style="border-color:var(--s-warn);background:linear-gradient(135deg,rgba(245,158,11,.16),transparent)">
-        <div class="k">⚡ Hora extra hoje</div><div class="t" id="jExtra" style="font-size:30px;color:#a06a00">${fmtMin(j.extraMin)}</div></div>
-      <div class="tl-step filled">
+      <div class="tl-step extra">
+        <div class="k">⚡ Hora extra hoje</div><div class="t" id="jExtra" style="font-size:30px">${fmtMin(j.extraMin)}</div></div>
+      <div class="tl-step janta">
         <div class="k">🍽️ Janta hoje</div><div class="t" id="jJanta" style="font-size:30px">${jantou?'Sim':'—'}</div></div>
     </div>
-    <div style="font-size:12.5px;color:var(--muted);margin-top:12px">
+    <div class="jornada-foot" style="font-size:12.5px;margin-top:12px">
       A hora extra é gerada automaticamente quando você ultrapassa o fim da jornada (${j.fim}). A janta é registrada quando a saída é após 18:59.</div>
   </div>`;
 }

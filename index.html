@@ -81,8 +81,8 @@ a{color:var(--blue);text-decoration:none}
 
 /* ============================ LOGIN ============================ */
 #login{position:fixed;inset:0;display:grid;place-items:center;
-  background:radial-gradient(1200px 700px at 20% -10%,rgba(31,58,104,.24),transparent),
-             radial-gradient(1000px 600px at 100% 110%,rgba(60,98,164,.26),transparent),var(--page);
+  background:radial-gradient(1200px 700px at 20% -10%,rgba(79,70,229,.24),transparent),
+             radial-gradient(1000px 600px at 100% 110%,rgba(129,140,248,.26),transparent),var(--page);
   z-index:50;padding:20px}
 /* Padrão de circuito decorativo no fundo do login — puramente visual (fica atrás do
    cartão de login, que tem fundo opaco), pedido do administrador pra ficar mais "tech". */
@@ -91,32 +91,32 @@ a{color:var(--blue);text-decoration:none}
   border-radius:24px;box-shadow:var(--shadow);padding:34px 30px;animation:pop .5s cubic-bezier(.2,.9,.3,1.2)}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--babyblue),var(--blue-600));
-  display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:0 6px 16px rgba(31,58,104,.34),inset 0 1px 0 rgba(255,255,255,.3)}
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:0 6px 16px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.3)}
 .brand h1{font-size:22px;margin:0}
 .brand small{color:var(--muted)}
 .field{margin-top:16px}
 .field label{display:block;font-size:13px;color:var(--text-2);margin-bottom:6px;font-weight:600}
-.input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);
+.input{width:100%;padding:12px 15px;border-radius:14px;border:1px solid var(--border);
   background:var(--surface-2);color:var(--text-1);font-size:15px;outline:none;transition:.2s}
 .input:focus{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
-/* Botões 3D (degradê azul, relevo e elevação) */
-.btn{border:none;border-radius:12px;padding:12px 16px;font-weight:700;font-size:15px;
-  display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .15s,box-shadow .15s,filter .15s;color:#fff}
+/* Botões modernos (formato pill, degradê vívido, relevo e elevação) */
+.btn{border:none;border-radius:999px;padding:12px 20px;font-weight:700;font-size:15px;
+  display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,filter .15s;color:#fff;letter-spacing:.1px}
 .btn.primary{background:linear-gradient(135deg,var(--babyblue),var(--blue) 42%,var(--blue-600));
-  box-shadow:0 6px 16px rgba(31,58,104,.34),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.primary:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(31,58,104,.45),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.primary:active{transform:translateY(0)}
+  box-shadow:0 6px 16px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.28)}
+.btn.primary:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(79,70,229,.4),inset 0 1px 0 rgba(255,255,255,.28)}
+.btn.primary:active{transform:translateY(0) scale(.98)}
 .btn.block{width:100%}
 .btn.ghost{background:var(--surface-1);color:var(--text-1);border:1px solid var(--border);box-shadow:0 2px 5px rgba(11,15,25,.07)}
-.btn.ghost:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 6px 14px rgba(11,15,25,.1)}
+.btn.ghost:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 18px rgba(79,70,229,.14)}
 .btn.green{background:linear-gradient(135deg,#3ed6a4,var(--green) 45%,var(--green-600));box-shadow:0 6px 16px rgba(22,163,74,.32),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.green:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(22,163,74,.42)}
-.btn.pink{background:linear-gradient(135deg,#f59bc4,var(--pink) 45%,var(--pink-600));box-shadow:0 6px 16px rgba(231,100,158,.32),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.pink:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(231,100,158,.42)}
-.btn.danger{background:linear-gradient(135deg,#e46a6a,var(--s-crit));box-shadow:0 6px 16px rgba(208,59,59,.32),inset 0 1px 0 rgba(255,255,255,.22)}
-.btn.danger:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(208,59,59,.42)}
+.btn.green:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(22,163,74,.38)}
+.btn.pink{background:linear-gradient(135deg,#f6a8cd,var(--pink) 45%,var(--pink-600));box-shadow:0 6px 16px rgba(236,72,153,.32),inset 0 1px 0 rgba(255,255,255,.28)}
+.btn.pink:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(236,72,153,.38)}
+.btn.danger{background:linear-gradient(135deg,#f0708f,var(--s-crit));box-shadow:0 6px 16px rgba(225,29,72,.32),inset 0 1px 0 rgba(255,255,255,.22)}
+.btn.danger:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(225,29,72,.38)}
 .btn:active{filter:brightness(.97)}
-.btn.sm{padding:7px 11px;font-size:13px;border-radius:9px;box-shadow:0 3px 8px rgba(31,58,104,.22),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.sm{padding:8px 14px;font-size:13px;border-radius:999px;box-shadow:0 3px 8px rgba(79,70,229,.22),inset 0 1px 0 rgba(255,255,255,.25)}
 .btn.sm.ghost{box-shadow:0 2px 5px rgba(11,15,25,.07)}
 /* Abas segmentadas (Registros / Acompanhar) */
 .segbar{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:16px;flex-wrap:wrap}
@@ -145,10 +145,10 @@ a{color:var(--blue);text-decoration:none}
 .side-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
 .side-brand .logo{width:36px;height:36px;font-size:16px;border-radius:10px}
 .side-brand span{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden}
-.nav-i{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:var(--text-2);
-  font-weight:600;font-size:14px;border:none;background:none;width:100%;text-align:left;white-space:nowrap}
-.nav-i:hover{background:var(--surface-1);color:var(--text-1)}
-.nav-i.active{background:var(--surface-1);color:var(--blue);box-shadow:inset 3px 0 0 var(--blue)}
+.nav-i{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;color:var(--text-2);
+  font-weight:600;font-size:14px;border:none;background:none;width:100%;text-align:left;white-space:nowrap;transition:background .15s,color .15s,transform .15s}
+.nav-i:hover{background:var(--surface-1);color:var(--text-1);transform:translateX(2px)}
+.nav-i.active{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.3)}
 .nav-i .ic{width:22px;text-align:center;font-size:17px;flex:0 0 22px}
 .nav-i>span:not(.ic):not(.badge){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-badge{flex:0 0 auto}
@@ -161,20 +161,22 @@ a{color:var(--blue);text-decoration:none}
 
 .main{display:flex;flex-direction:column;min-width:0}
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;
-  padding:12px 22px;background:color-mix(in srgb,var(--surface-1) 85%,transparent);
-  backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
-.icon-btn{width:38px;height:38px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);
-  color:var(--text-1);display:grid;place-items:center;font-size:17px}
-.icon-btn:hover{border-color:var(--blue)}
+  padding:14px 24px;background:color-mix(in srgb,var(--surface-1) 78%,transparent);
+  backdrop-filter:blur(14px);box-shadow:0 1px 0 var(--border),0 8px 24px rgba(19,22,43,.04)}
+.icon-btn{width:40px;height:40px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);
+  color:var(--text-1);display:grid;place-items:center;font-size:17px;transition:transform .15s,border-color .15s,color .15s}
+.icon-btn:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
 .searchbar{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:var(--surface-2);
-  border:1px solid var(--border);border-radius:12px;padding:9px 12px;color:var(--muted)}
+  border:1px solid var(--border);border-radius:999px;padding:10px 16px;color:var(--muted);transition:border-color .15s,box-shadow .15s}
+.searchbar:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
 .searchbar input{border:none;background:none;outline:none;color:var(--text-1);width:100%;font-size:14px}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;color:var(--text-1);
-  background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:8px 12px}
+  background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:8px 14px}
 .clock small{color:var(--muted);font-weight:600;font-size:11px;display:block}
 .avatar{width:40px;height:40px;border-radius:12px;object-fit:cover;border:2px solid var(--border);background:var(--surface-2)}
-.user-chip{display:flex;align-items:center;gap:10px;padding:5px 10px 5px 6px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2)}
+.user-chip{display:flex;align-items:center;gap:10px;padding:5px 14px 5px 6px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);transition:border-color .15s}
+.user-chip:hover{border-color:var(--blue)}
 .user-chip b{font-size:13px;display:block}
 .user-chip small{font-size:11px;color:var(--muted)}
 .notif{position:relative}
@@ -195,22 +197,22 @@ a{color:var(--blue);text-decoration:none}
 .g-3{grid-template-columns:repeat(3,1fr)}
 .g-2{grid-template-columns:repeat(2,1fr)}
 .card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:18px}
-.card h3{margin:0 0 4px;font-size:15px}
+  box-shadow:var(--shadow);padding:20px;transition:box-shadow .2s}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:800}
 .card .sub{color:var(--muted);font-size:12.5px;margin-bottom:12px}
 .kpi{display:flex;flex-direction:column;gap:8px}
 .kpi .top{display:flex;align-items:center;justify-content:space-between}
-.kpi .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;color:#fff}
+.kpi .ic{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;font-size:20px;color:#fff;box-shadow:0 6px 14px -2px rgba(19,22,43,.28)}
 .kpi .val{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .kpi .lbl{color:var(--text-2);font-size:13px;font-weight:600}
 .kpi .delta{font-size:12px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;gap:4px;align-items:center}
-.up{color:var(--s-good);background:rgba(12,163,12,.12)}
-.down{color:var(--s-crit);background:rgba(208,59,59,.12)}
+.up{color:var(--s-good);background:rgba(22,163,74,.12)}
+.down{color:var(--s-crit);background:rgba(225,29,72,.12)}
 
 .badge{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:5px}
-.b-good{color:var(--s-good);background:rgba(12,163,12,.13)}
-.b-warn{color:#a06a00;background:rgba(250,178,25,.18)}
-.b-crit{color:var(--s-crit);background:rgba(208,59,59,.13)}
+.b-good{color:var(--s-good);background:rgba(22,163,74,.13)}
+.b-warn{color:#a06a00;background:rgba(245,158,11,.18)}
+.b-crit{color:var(--s-crit);background:rgba(225,29,72,.13)}
 .b-info{color:var(--blue);background:rgba(79,70,229,.13)}
 .b-mut{color:var(--text-2);background:var(--surface-2)}
 html[data-theme="dark"] .b-warn{color:#FBBF24}
@@ -228,7 +230,7 @@ tbody tr:hover{background:var(--surface-2)}
 .tbl-wrap{overflow-x:auto}
 
 /* ============================ REGISTRO DE PONTO ============================ */
-.punch-hero{background:linear-gradient(135deg,rgba(31,58,104,.16),rgba(60,98,164,.12));
+.punch-hero{background:linear-gradient(135deg,rgba(79,70,229,.16),rgba(129,140,248,.12));
   border:1px solid var(--border);border-radius:22px;padding:26px;display:grid;
   grid-template-columns:1.1fr 1fr;gap:26px;align-items:center}
 .punch-clock{font-size:52px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
@@ -238,9 +240,9 @@ tbody tr:hover{background:var(--surface-2)}
 .next-badge .pill{width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(79,70,229,.2)}
 .punch-btn{width:100%;aspect-ratio:1/.62;border:none;border-radius:20px;color:#fff;font-size:22px;font-weight:800;
   background:linear-gradient(135deg,var(--babyblue),var(--blue) 45%,var(--blue-600));
-  box-shadow:0 14px 34px rgba(31,58,104,.4),inset 0 2px 0 rgba(255,255,255,.28);
+  box-shadow:0 14px 34px rgba(79,70,229,.4),inset 0 2px 0 rgba(255,255,255,.28);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:transform .15s,box-shadow .15s;position:relative;overflow:hidden}
-.punch-btn:hover{transform:translateY(-2px);box-shadow:0 20px 48px rgba(31,58,104,.5),inset 0 2px 0 rgba(255,255,255,.28)}
+.punch-btn:hover{transform:translateY(-2px);box-shadow:0 20px 48px rgba(79,70,229,.5),inset 0 2px 0 rgba(255,255,255,.28)}
 .punch-btn:active{transform:scale(.98)}
 .punch-btn .big{font-size:40px}
 .punch-btn.done{background:linear-gradient(135deg,#7c8ba1,#475569);box-shadow:none}
@@ -266,7 +268,7 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.35));
   width:26px;right:0;left:auto;animation:jbarSheen 2.6s ease-in-out infinite}
 .jbar-fill.warn{background:linear-gradient(90deg,var(--green),var(--s-warn))}
-.jbar-fill.good{background:var(--s-good);box-shadow:0 0 10px rgba(12,163,12,.4)}
+.jbar-fill.good{background:var(--s-good);box-shadow:0 0 10px rgba(22,163,74,.4)}
 .jbar-fill.good::after{display:none}
 .jbar-fill b{color:#fff;font-size:13px;font-weight:800;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3);font-variant-numeric:tabular-nums}
 /* Com a barra bem cheia (%) pequena, o rótulo não cabe dentro do preenchimento — nesse caso
@@ -2514,7 +2516,7 @@ function colabDashboard(){
 // sempre soma mais R$33,00 em cima do total, nunca substitui.
 function ticketCard(per){
   const tk=ticketInfo(per);
-  return `<div class="card" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(31,58,104,.08),rgba(60,98,164,.04))">
+  return `<div class="card" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(79,70,229,.08),rgba(129,140,248,.04))">
     <div>
       <div class="sub" style="margin:0 0 6px">🎫 Ticket do período</div>
       <div style="font-size:28px;font-weight:800;color:var(--text-1)">R$ ${tk.valorFmt}</div>
@@ -2537,7 +2539,7 @@ function jornadaCard(){
   const t=myDayObj();
   const jantou=!!(t.saida&&t.saida.time>'18:59');
   const barSt=jBarState(j);
-  return `<div class="card" style="background:linear-gradient(135deg,rgba(31,58,104,.10),rgba(60,98,164,.06))">
+  return `<div class="card" style="background:linear-gradient(135deg,rgba(79,70,229,.10),rgba(129,140,248,.06))">
     <div class="next-badge" id="jStatus" style="margin:0 0 16px"><span class="pill"></span> Jornada em andamento</div>
     <div class="jbar-row">
       <div class="jbar-time" id="jBarTime">${fmtMin(j.trabMin)} <small>de ${fmtMin(j.previstaMin)}</small></div>
@@ -2549,7 +2551,7 @@ function jornadaCard(){
     <div class="jbar-marks"><span>${j.ini}</span><span>${j.fim}</span></div>
     <div class="jbar-extra" id="jBarExtra" style="display:${j.extraMin>0?'flex':'none'}">⚡ +${fmtMin(j.extraMin)} além da jornada</div>
     <div class="grid g-2" style="gap:14px;margin-top:14px">
-      <div class="tl-step filled" style="border-color:var(--s-warn);background:linear-gradient(135deg,rgba(250,178,25,.16),transparent)">
+      <div class="tl-step filled" style="border-color:var(--s-warn);background:linear-gradient(135deg,rgba(245,158,11,.16),transparent)">
         <div class="k">⚡ Hora extra hoje</div><div class="t" id="jExtra" style="font-size:30px;color:#a06a00">${fmtMin(j.extraMin)}</div></div>
       <div class="tl-step filled">
         <div class="k">🍽️ Janta hoje</div><div class="t" id="jJanta" style="font-size:30px">${jantou?'Sim':'—'}</div></div>

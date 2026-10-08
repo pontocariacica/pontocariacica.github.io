@@ -99,8 +99,8 @@ a{color:var(--blue);text-decoration:none}
 .input{width:100%;padding:12px 15px;border-radius:14px;border:1px solid var(--border);
   background:var(--surface-2);color:var(--text-1);font-size:15px;outline:none;transition:.2s}
 .input:focus{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
-/* Botões modernos (formato pill, degradê vívido, relevo e elevação) */
-.btn{border:none;border-radius:999px;padding:12px 20px;font-weight:700;font-size:15px;
+/* Botões modernos (cantos quadrados/arredondados, degradê vívido, relevo e elevação) */
+.btn{border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:15px;
   display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,filter .15s;color:#fff;letter-spacing:.1px}
 .btn.primary{background:linear-gradient(135deg,var(--babyblue),var(--blue) 42%,var(--blue-600));
   box-shadow:0 6px 16px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.28)}
@@ -116,7 +116,7 @@ a{color:var(--blue);text-decoration:none}
 .btn.danger{background:linear-gradient(135deg,#f0708f,var(--s-crit));box-shadow:0 6px 16px rgba(225,29,72,.32),inset 0 1px 0 rgba(255,255,255,.22)}
 .btn.danger:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(225,29,72,.38)}
 .btn:active{filter:brightness(.97)}
-.btn.sm{padding:8px 14px;font-size:13px;border-radius:999px;box-shadow:0 3px 8px rgba(79,70,229,.22),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.sm{padding:8px 13px;font-size:13px;border-radius:9px;box-shadow:0 3px 8px rgba(79,70,229,.22),inset 0 1px 0 rgba(255,255,255,.25)}
 .btn.sm.ghost{box-shadow:0 2px 5px rgba(11,15,25,.07)}
 /* Abas segmentadas (Registros / Acompanhar) */
 .segbar{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:16px;flex-wrap:wrap}
@@ -141,19 +141,24 @@ a{color:var(--blue);text-decoration:none}
 .layout{display:grid;grid-template-columns:266px 1fr;min-height:100vh;transition:grid-template-columns .25s}
 .layout.collapsed{grid-template-columns:74px 1fr}
 .sidebar{background:var(--surface-2);border-right:1px solid var(--border);padding:16px 12px;
-  position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+  position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .side-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
 .side-brand .logo{width:36px;height:36px;font-size:16px;border-radius:10px}
 .side-brand span{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden}
-.nav-i{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;color:var(--text-2);
-  font-weight:600;font-size:14px;border:none;background:none;width:100%;text-align:left;white-space:nowrap;transition:background .15s,color .15s,transform .15s}
-.nav-i:hover{background:var(--surface-1);color:var(--text-1);transform:translateX(2px)}
+.nav-i{display:flex;align-items:center;gap:11px;padding:9px;border-radius:12px;color:var(--text-2);
+  font-weight:600;font-size:14px;border:none;background:none;width:100%;text-align:left;white-space:nowrap;transition:background .15s,color .15s}
+.nav-i:hover{background:var(--surface-1);color:var(--text-1)}
 .nav-i.active{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.3)}
-.nav-i .ic{width:22px;text-align:center;font-size:17px;flex:0 0 22px}
+.nav-i .ic{width:30px;height:30px;flex:0 0 30px;display:grid;place-items:center;font-size:15px;
+  border-radius:9px;background:var(--surface-1);transition:background .15s}
+.nav-i:hover .ic{background:var(--babyblue-soft)}
+.nav-i.active .ic{background:rgba(255,255,255,.22)}
 .nav-i>span:not(.ic):not(.badge){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-badge{flex:0 0 auto}
 .layout.collapsed .side-brand span,.layout.collapsed .nav-i span,.layout.collapsed .nav-sec{display:none}
-.nav-sec{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 12px 4px}
+.nav-sec{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;
+  padding:16px 11px 6px;margin-top:4px;border-top:1px solid var(--border)}
+.nav-sec:first-child{border-top:none;margin-top:0}
 .nav-badge{animation:navpulse 1.7s ease-in-out infinite;padding:3px 8px;font-size:11px;margin-left:8px}
 @keyframes navpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
 .layout.collapsed .nav-badge{margin-left:0 !important;position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 3px;font-size:10px}
@@ -163,11 +168,11 @@ a{color:var(--blue);text-decoration:none}
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;
   padding:14px 24px;background:color-mix(in srgb,var(--surface-1) 78%,transparent);
   backdrop-filter:blur(14px);box-shadow:0 1px 0 var(--border),0 8px 24px rgba(19,22,43,.04)}
-.icon-btn{width:40px;height:40px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);
+.icon-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);
   color:var(--text-1);display:grid;place-items:center;font-size:17px;transition:transform .15s,border-color .15s,color .15s}
 .icon-btn:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
 .searchbar{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:var(--surface-2);
-  border:1px solid var(--border);border-radius:999px;padding:10px 16px;color:var(--muted);transition:border-color .15s,box-shadow .15s}
+  border:1px solid var(--border);border-radius:14px;padding:10px 16px;color:var(--muted);transition:border-color .15s,box-shadow .15s}
 .searchbar:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
 .searchbar input{border:none;background:none;outline:none;color:var(--text-1);width:100%;font-size:14px}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
@@ -175,7 +180,7 @@ a{color:var(--blue);text-decoration:none}
   background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:8px 14px}
 .clock small{color:var(--muted);font-weight:600;font-size:11px;display:block}
 .avatar{width:40px;height:40px;border-radius:12px;object-fit:cover;border:2px solid var(--border);background:var(--surface-2)}
-.user-chip{display:flex;align-items:center;gap:10px;padding:5px 14px 5px 6px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);transition:border-color .15s}
+.user-chip{display:flex;align-items:center;gap:10px;padding:5px 14px 5px 6px;border-radius:14px;border:1px solid var(--border);background:var(--surface-2);transition:border-color .15s}
 .user-chip:hover{border-color:var(--blue)}
 .user-chip b{font-size:13px;display:block}
 .user-chip small{font-size:11px;color:var(--muted)}
@@ -191,6 +196,20 @@ a{color:var(--blue);text-decoration:none}
 .page-head p{margin:2px 0 0;color:var(--muted);font-size:14px}
 .page-head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 
+/* ===== Resumo em destaque do Dashboard ("Hoje em números") ===== */
+.dash-hero{background:linear-gradient(135deg,var(--babyblue),var(--blue) 55%,var(--blue-600));
+  border-radius:20px;padding:24px 26px;color:#fff;box-shadow:0 14px 34px rgba(79,70,229,.3);margin-bottom:16px}
+.dash-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.dash-hero-date{font-size:13px;opacity:.85;text-transform:capitalize;font-weight:700;letter-spacing:.2px}
+.dash-hero-top h2{margin:3px 0 0;font-size:23px}
+.dash-hero-period{text-align:right;font-size:12px;opacity:.85}
+.dash-hero-period b{display:block;font-size:14px;margin-top:2px}
+.dash-hero-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:18px;margin-top:22px}
+.dhs{display:flex;flex-direction:column;gap:2px;padding-left:14px;border-left:2px solid rgba(255,255,255,.3)}
+.dhs .n{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.dhs .l{font-size:12px;opacity:.85}
+@media (max-width:560px){.dash-hero-stats{grid-template-columns:repeat(2,1fr)}}
+
 /* ============================ CARDS / GRID ============================ */
 .grid{display:grid;gap:16px}
 .g-4{grid-template-columns:repeat(4,1fr)}
@@ -202,7 +221,7 @@ a{color:var(--blue);text-decoration:none}
 .card .sub{color:var(--muted);font-size:12.5px;margin-bottom:12px}
 .kpi{display:flex;flex-direction:column;gap:8px}
 .kpi .top{display:flex;align-items:center;justify-content:space-between}
-.kpi .ic{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;font-size:20px;color:#fff;box-shadow:0 6px 14px -2px rgba(19,22,43,.28)}
+.kpi .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;color:#fff;box-shadow:0 6px 14px -2px rgba(19,22,43,.28)}
 .kpi .val{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .kpi .lbl{color:var(--text-2);font-size:13px;font-weight:600}
 .kpi .delta{font-size:12px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;gap:4px;align-items:center}
@@ -228,6 +247,30 @@ tbody tr:hover{background:var(--surface-2)}
 .uname{display:flex;align-items:center;gap:10px}
 .uname b{font-size:13.5px}.uname small{color:var(--muted);font-size:11.5px;display:block}
 .tbl-wrap{overflow-x:auto}
+
+/* ============================ CARTÕES DE DIA (histórico) ============================ */
+.day-cards{display:flex;flex-direction:column;gap:9px}
+.day-card{display:flex;align-items:center;gap:16px;padding:13px 16px;border-radius:14px;
+  border:1px solid var(--border);border-left:4px solid var(--border);background:var(--surface-2);
+  flex-wrap:wrap;transition:border-color .15s ease}
+.day-card:hover{border-color:var(--ring)}
+.day-card .dc-date{flex:0 0 58px}
+.day-card .dc-date b{display:block;font-size:14px;color:var(--text-1)}
+.day-card .dc-date small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.day-card .dc-mid{flex:1;min-width:170px;display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+.day-card .dcv{display:flex;flex-direction:column;min-width:44px}
+.day-card .dcv b{font-size:13.5px;color:var(--text-1);font-variant-numeric:tabular-nums}
+.day-card .dcv small{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.day-card .dc-right{flex:0 0 auto;display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.day-card .dc-off-label{color:var(--text-2);font-weight:600;font-size:13px}
+.day-card.dc-domingo{border-left-color:#13162B}
+.day-card.dc-feriado{border-left-color:var(--s-crit)}
+.day-card.dc-ferias{border-left-color:#f3b23a}
+@media(max-width:560px){
+  .day-card{gap:10px;padding:12px}
+  .day-card .dc-mid{gap:14px}
+  .day-card .dc-right{width:100%;margin-left:0;justify-content:flex-start}
+}
 
 /* ============================ REGISTRO DE PONTO ============================ */
 .punch-hero{background:linear-gradient(135deg,rgba(79,70,229,.16),rgba(129,140,248,.12));
@@ -281,14 +324,17 @@ html[data-theme="dark"] .tl-step.filled .t{color:var(--green)}
 html[data-theme="dark"] .jbar-extra{color:#FBBF24}
 
 /* ===== Andamento do dia de todos os colaboradores (Painel do Admin) ===== */
-.gprow{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--border)}
-.gprow:last-child{border-bottom:none}
-.gprow-who{display:flex;align-items:center;gap:10px;width:210px;flex-shrink:0;min-width:0}
+/* Grade de cartões — um por colaborador — em vez da lista de linhas empilhadas de antes. */
+#gpList{display:grid;grid-template-columns:repeat(auto-fill,minmax(256px,1fr));gap:12px}
+.gprow{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--border);
+  border-radius:14px;background:var(--surface-2);transition:border-color .15s,box-shadow .15s}
+.gprow:hover{border-color:var(--blue);box-shadow:0 6px 16px rgba(19,22,43,.06)}
+.gprow-who{display:flex;align-items:center;gap:10px;width:auto;flex-shrink:0;min-width:0}
 .gprow-txt{min-width:0}
 .gprow-txt b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gprow-txt small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.gprow-bar{flex:1;min-width:0}
-.gprow-meta{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12px;gap:8px}
+.gprow-bar{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.gprow-meta{display:flex;justify-content:space-between;align-items:center;margin-top:0;font-size:12px;gap:8px}
 .gprow-meta .mono{font-variant-numeric:tabular-nums;color:var(--text-2);font-weight:700;white-space:nowrap}
 .gprow-meta .mono small{font-weight:500;color:var(--muted)}
 /* Uma "hora grande" por hora de jornada, cada uma com 6 barrinhas pequenas (10min cada) — ver
@@ -299,14 +345,13 @@ html[data-theme="dark"] .jbar-extra{color:#FBBF24}
 .gseg-track{display:flex;gap:3px;height:14px}
 .gseg-hour{flex:1;display:flex;gap:1.5px;min-width:0}
 .gseg-hour+.gseg-hour{margin-left:2px}
-.gseg-tick{flex:1;min-width:2px;height:100%;border-radius:2px;background:var(--surface-2);
+.gseg-tick{flex:1;min-width:2px;height:100%;border-radius:2px;background:var(--border);
   box-shadow:inset 0 1px 2px rgba(11,15,25,.10);
   background-image:linear-gradient(90deg,var(--blue) var(--p,0%),transparent var(--p,0%));
   transition:background-image .3s linear}
 .gseg-tick.extra{background-image:linear-gradient(90deg,var(--s-warn) var(--p,0%),transparent var(--p,0%))}
-@media (max-width:680px){
-  .gprow{flex-direction:column;align-items:stretch;gap:8px}
-  .gprow-who{width:auto}
+@media (max-width:560px){
+  #gpList{grid-template-columns:1fr}
 }
 
 /* progress ring */
@@ -2610,7 +2655,7 @@ function gprowWho(emp){
 }
 function gprowShell(emp,badgeHTML,dim){
   return `<div class="gprow"${dim?' style="opacity:.55"':''}>${gprowWho(emp)}
-    <div class="gprow-bar"><div class="gprow-meta" style="justify-content:flex-end">${badgeHTML}</div></div></div>`;
+    <div class="gprow-meta" style="justify-content:flex-start">${badgeHTML}</div></div>`;
 }
 // "emp.status==='ferias'" é uma marcação manual (o Admin muda no cadastro do funcionário) — mas
 // férias de verdade são aprovadas em Férias & Folgas (state.vacations) e o status do cadastro
@@ -2746,6 +2791,38 @@ function colabPunch(){
 const flowItem=(n,t,s,c)=>`<div class="mini-item"><div class="ic" style="background:${c}22;color:${c};font-weight:800">${n}</div>
   <div class="txt"><b>${t}</b><small>${s}</small></div></div>`;
 
+function diaCardHTML(r,withTotal){
+  if(r.ferias)return `<div class="day-card dc-ferias">
+    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
+    <div class="dc-mid"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></div>
+  </div>`;
+  if(r.domingo)return `<div class="day-card dc-domingo">
+    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
+    <div class="dc-mid"><span class="dc-off-label">Domingo</span></div>
+  </div>`;
+  if(r.feriado)return `<div class="day-card dc-feriado">
+    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
+    <div class="dc-mid"><span class="badge b-crit">Folga — Feriado: ${r.feriado}</span></div>
+  </div>`;
+  return `<div class="day-card">
+    <div class="dc-date"><b>${fmtd(r.data)}</b><small>${diaSemanaAbrev(r.data)}</small></div>
+    <div class="dc-mid">
+      <div class="dcv"><b>${r.entrada}</b><small>Entrada</small></div>
+      <div class="dcv"><b>${r.saida}</b><small>Saída</small></div>
+      ${withTotal?`<div class="dcv"><b>${r.total}</b><small>Total</small></div>`:''}
+    </div>
+    <div class="dc-right">
+      ${r.ajustado?'<span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}
+      ${r.extraMin>0?`<span class="badge b-warn">⚡ +${r.extra}</span>`:''}
+      ${r.janta?'<span class="badge b-good">🍽️ Janta</span>':''}
+    </div>
+  </div>`;
+}
+function diaCardsWrapHTML(rows,emptyMsg,withTotal){
+  return rows.length
+    ? `<div class="day-cards">${rows.map(r=>diaCardHTML(r,withTotal)).join('')}</div>`
+    : `<div style="color:var(--muted);text-align:center;padding:22px">${emptyMsg}</div>`;
+}
 function colabHistory(){
   const b=currentPeriod();
   const per=periodLabel(b);
@@ -2774,25 +2851,14 @@ function colabHistory(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
-        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
-        <td>${r.entrada}</td><td>${r.saida}</td>
-        <td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
-      }).join('')
-    : `<tr><td colspan="5" style="color:var(--muted)">Nenhum registro de ponto no período ainda.</td></tr>`;
+  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum registro de ponto no período ainda.',false);
   return `${head('Meu Histórico','Seus pontos, horas extras e jantas no período atual ('+per+').',
     `<button class="btn ghost" onclick="gerarEspelho()">📄 Espelho PDF</button>
      <button class="btn danger" onclick="fecharMeuPonto()">🔒 Fechar Meu Ponto</button>`)}
   <div class="card">
-    <div class="sub" style="margin-bottom:6px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
-    <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Hora extra</th><th>Janta</th></tr></thead>
-    <tbody>${rows}</tbody></table></div></div>`;
+    <div class="sub" style="margin-bottom:12px">⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    ${rows}
+  </div>`;
 }
 function fecharMeuPonto(){
   const b=currentPeriod();
@@ -3028,14 +3094,7 @@ function colabAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
-        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
-      }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
   return `${head('Acompanhar Ponto','Acompanhe todos os seus lançamentos, horas extras e jantas dentro do período.')}
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
@@ -3046,10 +3105,8 @@ function colabAcompanhar(){
         <button class="btn sm ghost" onclick="myAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+    <div class="sub" style="margin-bottom:12px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
+    ${rows}
     <div style="margin-top:14px"><button class="btn sm ghost" onclick="verPonto('${state.user.nome.replace(/'/g,"")}')">👁️ Ver todos os lançamentos (com local e horário exatos)</button></div>
   </div>`;
 }
@@ -3103,20 +3160,11 @@ function verPontosAnterioresDetalhe(k){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
-        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
-      }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
   openModal({wide:true,content:`<div class="modal-head"><h3>🗂️ ${periodLabel(b)}</h3></div>
   <div class="modal-body">
     <div class="sub" style="margin-bottom:10px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ Total de horas extras no período: <b>${d.extraTotal}</b> • 🍽️ ${d.jantas} janta(s)</div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+    ${rows}
   </div>
   <div class="modal-foot">
     <button class="btn ghost" onclick="closeModal()">Fechar</button>
@@ -3455,9 +3503,24 @@ function adminDashboard(){
     return 3;
   };
   withJ.sort((a,b)=>prio(a)-prio(b));
+  const emAndamentoAgora=withJ.filter(x=>x.j&&x.j.emAndamento).length;
+  const ativos=e.filter(x=>x.status==='ativo').length;
+  const hojeLabel=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
   return `${head('Dashboard','Visão geral da operação — período '+per+'.',
     `<button class="btn ghost" onclick="go('reports')">📄 Relatórios</button>
      <button class="btn primary" onclick="openEmployeeForm()">＋ Novo Funcionário</button>`)}
+  <div class="dash-hero">
+    <div class="dash-hero-top">
+      <div><div class="dash-hero-date">${hojeLabel}</div><h2>Hoje em números</h2></div>
+      <div class="dash-hero-period">Período atual<b>${per}</b></div>
+    </div>
+    <div class="dash-hero-stats">
+      <div class="dhs"><span class="n">${pontosHoje}</span><span class="l">pontos batidos hoje</span></div>
+      <div class="dhs"><span class="n">${emAndamentoAgora}</span><span class="l">em andamento agora</span></div>
+      <div class="dhs"><span class="n">${fmtMin(extraMinTotal)}</span><span class="l">horas extras (período)</span></div>
+      <div class="dhs"><span class="n">${ativos}</span><span class="l">colaboradores ativos</span></div>
+    </div>
+  </div>
   <div class="card">
     <h3>Andamento do dia</h3>
     <div class="sub">Todos os colaboradores, de uma vez só — cada barrinha vale 10 minutos; a cor muda pra laranja assim que a hora extra começa a contar.</div>
@@ -3889,14 +3952,7 @@ function adminRegAcompanhar(){
     }
     cur.setDate(cur.getDate()+1);
   }
-  const rows=todasLinhas.length
-    ? todasLinhas.map(r=>{
-        if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="4"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
-        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="4" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
-        return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td><td>${r.entrada}</td><td>${r.saida}</td><td>${r.total}</td><td>${r.extraMin>0?`<span class="badge b-warn">+${r.extra}</span>`:'<span style="color:var(--muted)">—</span>'}</td><td>${r.janta?'🍽️ Sim':'<span style="color:var(--muted)">—</span>'}</td></tr>`;
-      }).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">Nenhum ponto registrado neste período.</td></tr>`;
+  const rows=diaCardsWrapHTML(todasLinhas,'Nenhum ponto registrado neste período.',true);
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <button class="btn sm ghost" onclick="adminAcompBack()">‹ Voltar</button>
@@ -3908,10 +3964,8 @@ function adminRegAcompanhar(){
         <button class="btn sm ghost" onclick="adminAcompShift(1)" title="Próximo período">›</button>
       </div>
     </div>
-    <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+    <div class="sub" style="margin-bottom:12px">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
+    ${rows}
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm ghost" onclick="verPonto('${state.acompEmp.replace(/'/g,"")}')">👁️ Ver detalhes</button>
       <button class="btn sm primary" onclick="imprimirPonto('${state.acompEmp.replace(/'/g,"")}',periodBoundsFromKey('${periodKey(b)}'))">🖨️ Imprimir espelho</button>

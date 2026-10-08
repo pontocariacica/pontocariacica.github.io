@@ -99,8 +99,8 @@ a{color:var(--blue);text-decoration:none}
 .input{width:100%;padding:12px 15px;border-radius:14px;border:1px solid var(--border);
   background:var(--surface-2);color:var(--text-1);font-size:15px;outline:none;transition:.2s}
 .input:focus{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
-/* Botões modernos (cantos quadrados/arredondados, degradê vívido, relevo e elevação) */
-.btn{border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:15px;
+/* Botões modernos (cantos quadrados, degradê vívido, relevo e elevação) */
+.btn{border:none;border-radius:0;padding:12px 18px;font-weight:700;font-size:15px;
   display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,filter .15s;color:#fff;letter-spacing:.1px}
 .btn.primary{background:linear-gradient(135deg,var(--babyblue),var(--blue) 42%,var(--blue-600));
   box-shadow:0 6px 16px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.28)}
@@ -116,7 +116,7 @@ a{color:var(--blue);text-decoration:none}
 .btn.danger{background:linear-gradient(135deg,#f0708f,var(--s-crit));box-shadow:0 6px 16px rgba(225,29,72,.32),inset 0 1px 0 rgba(255,255,255,.22)}
 .btn.danger:hover{transform:translateY(-2px) scale(1.015);box-shadow:0 14px 28px rgba(225,29,72,.38)}
 .btn:active{filter:brightness(.97)}
-.btn.sm{padding:8px 13px;font-size:13px;border-radius:9px;box-shadow:0 3px 8px rgba(79,70,229,.22),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.sm{padding:8px 13px;font-size:13px;border-radius:0;box-shadow:0 3px 8px rgba(79,70,229,.22),inset 0 1px 0 rgba(255,255,255,.25)}
 .btn.sm.ghost{box-shadow:0 2px 5px rgba(11,15,25,.07)}
 /* Abas segmentadas (Registros / Acompanhar) */
 .segbar{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:16px;flex-wrap:wrap}
@@ -2843,7 +2843,7 @@ function colabHistory(){
     ? todasLinhas.map(r=>{
         if(r.ferias)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#fff4e0;color:#8a5a00">🏖️ Férias</span></td></tr>`;
         if(r.afastado)return `<tr><td><b>${fmtd(r.data)}</b></td><td colspan="3"></td><td style="text-align:center"><span class="badge" style="background:#EDE9FE;color:#5B21B6">🚷 Afastado</span></td></tr>`;
-        if(r.domingo)return `<tr style="background:#13162B"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
+        if(r.domingo)return `<tr style="background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%)"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-style:italic;color:#fff">Domingo</td><td style="text-align:center;color:#fff">—</td></tr>`;
         if(r.feriado)return `<tr style="background:#E11D48"><td style="color:#fff"><b>${fmtd(r.data)}</b></td><td colspan="3" style="text-align:center;font-weight:700;color:#fff">Folga — Feriado: ${r.feriado}</td><td style="text-align:center;color:#fff">—</td></tr>`;
         return `<tr><td><b>${fmtd(r.data)}</b><br><small style="color:var(--muted);font-weight:400">${diaSemanaAbrev(r.data)}</small>${r.ajustado?' <span class="badge b-info" style="font-size:10px;padding:2px 6px">ajustado</span>':''}</td>
         <td>${r.entrada}</td><td>${r.saida}</td>

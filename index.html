@@ -1881,7 +1881,7 @@ function loginAsEmployee(emp){
 // (Firebase Authentication de verdade + regras de segurança no Firestore). Enquanto isso não
 // acontece, troque esta senha sempre que desconfiar de acesso indevido, e não reuse em outro lugar.
 const ADMIN_USER='admin';
-const ADMIN_PASS_HASH='093c0666fe8270b2663b035992a70f2714c2ccc814897054ebc8b2eb06d3dfc1';
+const ADMIN_PASS_HASH='73bae6f07545f57ff4611f73161be92dd176bfdb9443388cbedda128258d886d';
 async function sha256Hex(text){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');

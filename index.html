@@ -98,16 +98,47 @@ a{color:var(--blue);text-decoration:none}
    recriada em loop, então não tem o problema de animação reiniciando que o card de
    registrar ponto teve. */
 #loginSplash{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;
-  align-items:center;justify-content:center;gap:18px;border-radius:inherit;
+  align-items:center;justify-content:center;gap:8px;border-radius:24px;
   background:linear-gradient(160deg,#1E1B4B,var(--blue) 78%);color:#fff;
+  padding:30px 24px;box-sizing:border-box;
   animation:pop .35s cubic-bezier(.2,.9,.3,1.2)}
 #loginSplash.show{display:flex}
+/* Cartão normal (mesmo retângulo arredondado de sempre), com uma bordinha decorativa de
+   carrinhos em miniatura repetindo ao longo das bordas de cima e de baixo — pedido do
+   administrador pra dar um toque temático sem mexer no formato do cartão em si. Ícone
+   simples (carroceria + 2 rodas) ladrilhado via background-image; ::before/::after do
+   próprio #loginSplash, não interfere no conteúdo central. */
+#loginSplash::before,#loginSplash::after{content:'';position:absolute;left:10px;right:10px;
+  height:18px;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 22'%3E%3Cpath fill='rgba(255,255,255,.4)' d='M3,16 L3,13 Q3,11 5,11 L9,11 L12,6 Q13,5 15,5 L25,5 Q27,5 28,6 L31,11 L35,11 Q37,11 37,13 L37,16 Z'/%3E%3Ccircle cx='10' cy='16' r='3' fill='rgba(255,255,255,.4)'/%3E%3Ccircle cx='30' cy='16' r='3' fill='rgba(255,255,255,.4)'/%3E%3C/svg%3E");
+  background-repeat:repeat-x;background-size:32px 18px}
+#loginSplash::before{top:6px}
+#loginSplash::after{bottom:6px}
 #loginSplash .ls-logo{font-family:'Arial Black','Arial Narrow',Arial,system-ui,sans-serif;
-  font-weight:900;font-style:italic;font-size:30px;letter-spacing:-1px}
-#loginSplash .ls-ring{width:32px;height:32px;border-radius:50%;
-  border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:lsSpin .8s linear infinite}
+  font-weight:900;font-style:italic;font-size:22px;letter-spacing:-1px}
+/* Relógio + data ao vivo, mesmo estilo do cartão de Registrar Ponto (.punch-clock/.punch-date)
+   — preenche a tela de carregamento com algo útil e familiar em vez de ficar vazia. */
+#loginSplash .ls-clock{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;
+  letter-spacing:-.5px;line-height:1}
+#loginSplash .ls-date{color:rgba(255,255,255,.78);font-size:10px;text-transform:uppercase;
+  font-weight:700;letter-spacing:.5px;margin-top:2px}
+#loginSplash .ls-divider{width:40px;height:1px;background:rgba(255,255,255,.22)}
+/* Carreta cegonha atravessando o cartão, de ponta a ponta, em loop (rodinhas girando) —
+   pedido do administrador no lugar de um spinner genérico. A duração de UMA volta
+   completa (até o caminhão sumir do outro lado) é o que define SPLASH_MIN_MS no JS: só
+   depois que o caminhão some é que a tela realmente entra no sistema, mesmo que o login
+   em si já tenha terminado antes (ver enterApp()). */
+#loginSplash .cegonha-box{width:130px;height:44px;overflow:hidden;position:relative}
+#loginSplash .cegonha-rig{position:absolute;top:0;left:0;width:160px;height:44px;
+  animation:lsCegonhaDrive 4.5s linear infinite}
+#loginSplash .cegonha-rig svg{width:160px;height:44px;display:block}
+#loginSplash .cegonha-rig .hull{fill:#fff}
+#loginSplash .cegonha-rig .car{fill:rgba(255,255,255,.55)}
+#loginSplash .cegonha-rig .hub{transform-box:fill-box;transform-origin:center;animation:lsCegonhaWheel .5s linear infinite}
+@keyframes lsCegonhaDrive{0%{transform:translateX(-160px)}100%{transform:translateX(130px)}}
+@keyframes lsCegonhaWheel{to{transform:rotate(360deg)}}
 #loginSplash .ls-txt{font-size:12px;font-weight:700;color:rgba(255,255,255,.75);letter-spacing:.4px;text-transform:uppercase}
-@keyframes lsSpin{to{transform:rotate(360deg)}}
+@keyframes lsDotPulse{0%,100%{opacity:.3;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--babyblue),var(--blue-600));
   display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:0 6px 16px rgba(79,70,229,.34),inset 0 1px 0 rgba(255,255,255,.3)}
@@ -637,7 +668,43 @@ body{ zoom: var(--ui-scale); }
   <div class="login-card">
     <div id="loginSplash">
       <div class="ls-logo">transauto</div>
-      <div class="ls-ring"></div>
+      <div class="ls-clock" id="splashClock">--:--:--</div>
+      <div class="ls-date" id="splashDate"></div>
+      <div class="ls-divider"></div>
+      <div class="cegonha-box">
+        <div class="cegonha-rig">
+          <svg viewBox="0 0 160 44">
+            <rect class="hull" x="6" y="27" width="118" height="3" rx="1"/>
+            <rect class="hull" x="18" y="9" width="92" height="3" rx="1"/>
+            <rect class="hull" x="24" y="9" width="2" height="18"/>
+            <rect class="hull" x="100" y="9" width="2" height="18"/>
+            <rect class="hull" x="6" y="27" width="2" height="8"/>
+            <rect class="hull" x="118" y="24" width="10" height="4"/>
+            <rect class="car" x="10" y="21" width="22" height="6" rx="2"/>
+            <rect class="car" x="16" y="17" width="11" height="5" rx="2"/>
+            <rect class="car" x="42" y="21" width="22" height="6" rx="2"/>
+            <rect class="car" x="48" y="17" width="11" height="5" rx="2"/>
+            <rect class="car" x="74" y="21" width="22" height="6" rx="2"/>
+            <rect class="car" x="80" y="17" width="11" height="5" rx="2"/>
+            <rect class="car" x="24" y="4" width="20" height="5" rx="2"/>
+            <rect class="car" x="29" y="1" width="10" height="4" rx="2"/>
+            <rect class="car" x="56" y="4" width="20" height="5" rx="2"/>
+            <rect class="car" x="61" y="1" width="10" height="4" rx="2"/>
+            <rect class="hull" x="128" y="12" width="26" height="18" rx="2"/>
+            <rect class="car" x="132" y="15" width="9" height="8" rx="1"/>
+            <circle class="hull" cx="14" cy="38" r="4.5"/>
+            <rect class="hub" x="13.2" y="34.5" width="1.6" height="3.5" fill="#1E1B4B"/>
+            <circle class="hull" cx="40" cy="38" r="4.5"/>
+            <rect class="hub" x="39.2" y="34.5" width="1.6" height="3.5" fill="#1E1B4B"/>
+            <circle class="hull" cx="70" cy="38" r="4.5"/>
+            <rect class="hub" x="69.2" y="34.5" width="1.6" height="3.5" fill="#1E1B4B"/>
+            <circle class="hull" cx="100" cy="38" r="4.5"/>
+            <rect class="hub" x="99.2" y="34.5" width="1.6" height="3.5" fill="#1E1B4B"/>
+            <circle class="hull" cx="138" cy="38" r="4.5"/>
+            <rect class="hub" x="137.2" y="34.5" width="1.6" height="3.5" fill="#1E1B4B"/>
+          </svg>
+        </div>
+      </div>
       <div class="ls-txt">Entrando…</div>
     </div>
     <div class="brand brand-logo" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:16px">
@@ -1722,8 +1789,14 @@ let restoringSession=false;
 function readSession(){try{return JSON.parse(localStorage.getItem('pontoapp_session')||'null');}catch(e){return null;}}
 // Tela de carregamento sobre o formulário de login (ver comentário no CSS de #loginSplash) —
 // mostrada enquanto há uma sessão salva aguardando restoreSession() confirmar o login automático.
-function showLoginSplash(){const el=document.getElementById('loginSplash');if(el)el.classList.add('show');}
-function hideLoginSplash(){const el=document.getElementById('loginSplash');if(el)el.classList.remove('show');}
+let splashActive=false, splashShownAt=0;
+// Tempo mínimo de exibição = duração de UMA volta completa da carreta cegonha atravessando
+// o cartão (ver @keyframes lsCegonhaDrive no CSS, 4.5s) — pedido do administrador: só
+// depois que o caminhão "some" do outro lado é que a tela realmente entra no sistema,
+// mesmo que o login em si (restoreSession) já tenha terminado antes (ver enterApp()).
+const SPLASH_MIN_MS=4500;
+function showLoginSplash(){const el=document.getElementById('loginSplash');if(el){el.classList.add('show');splashActive=true;splashShownAt=Date.now();}}
+function hideLoginSplash(){const el=document.getElementById('loginSplash');if(el)el.classList.remove('show');splashActive=false;}
 function saveSession(){
   try{
     let s=null;
@@ -1751,15 +1824,28 @@ function restoreSession(){
   if(!state.role)hideLoginSplash();
 }
 function enterApp(){
-  document.getElementById('login').style.display='none';
-  document.getElementById('app').style.display='block';
+  // Captura agora: por causa do tempo mínimo de exibição do splash (ver SPLASH_MIN_MS), a
+  // revelação pode ficar pra depois, e restoringSession já pode ter voltado a false quando
+  // isso acontecer (restoreSession() termina seu try/finally síncrono bem antes disso).
+  const wasRestoring=restoringSession;
   state.page='dashboard';state.q='';state.empStatus='todos';
   document.getElementById('topAvatar').src=state.user.av;
   document.getElementById('topName').textContent=state.user.nome;
   document.getElementById('topRole').textContent=state.user.role;
   renderNav();render();
   saveSession();
-  if(!restoringSession)toast('Bem-vindo(a)!',state.user.nome,'info');
+  const reveal=()=>{
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='block';
+    if(!wasRestoring)toast('Bem-vindo(a)!',state.user.nome,'info');
+  };
+  if(splashActive){
+    const wait=Math.max(0,SPLASH_MIN_MS-(Date.now()-splashShownAt));
+    splashActive=false;
+    setTimeout(reveal,wait);
+  }else{
+    reveal();
+  }
 }
 function loginAdmin(){
   state.role='admin';
@@ -1865,6 +1951,12 @@ function tick(){
   document.getElementById('topDate').textContent=ds;
   const pc=document.getElementById('punchClock');
   if(pc)pc.textContent=t;
+  // Relógio + data da tela de carregamento do login (ver #loginSplash) — mesmo formato
+  // completo usado no cartão de Registrar Ponto (dia da semana e mês por extenso).
+  const sc=document.getElementById('splashClock');
+  if(sc)sc.textContent=t;
+  const sd=document.getElementById('splashDate');
+  if(sd)sd.textContent=d.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
   updateJornadaLive();
   updateAdminProgressLive();
 }

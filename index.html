@@ -297,6 +297,12 @@ tbody tr:hover{background:var(--surface-2)}
 .uname{display:flex;align-items:center;gap:10px}
 .uname b{font-size:13.5px}.uname small{color:var(--muted);font-size:11.5px;display:block}
 .tbl-wrap{overflow-x:auto}
+/* Cabeçalho da tabela de "Acompanhar Ponto" (detalhe do colaborador, admin) com fundo azul
+   sólido e texto branco — pedido do administrador, só nessa tabela (as demais do sistema
+   continuam com o cabeçalho padrão, cinza). */
+.acomp-tbl thead th{background:var(--blue);color:#fff;border-bottom:none}
+.acomp-tbl thead th:first-child{border-top-left-radius:8px}
+.acomp-tbl thead th:last-child{border-top-right-radius:8px}
 
 /* ============================ REGISTRO DE PONTO ============================
    Card hero escuro (gradiente índigo profundo) + cartão de trilha — mesmas
@@ -4181,7 +4187,7 @@ function adminRegAcompanhar(){
       </div>
     </div>
     <div class="sub">${d.dias} dia(s) com ponto${d.feriasDias?' (incluindo 🏖️ '+d.feriasDias+' de férias)':''} • ⚡ ${d.extraTotal} de hora extra no período • 🍽️ ${d.jantas} janta(s) no período</div>
-    <div class="tbl-wrap"><table>
+    <div class="tbl-wrap"><table class="acomp-tbl">
       <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Hora extra</th><th>Janta</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">

@@ -824,13 +824,12 @@ const state = {
   employees:[],      // cadastrados pelo administrador
   adjustments:[],
   logs:[],
-  holidays:[
-    {data:'2026-07-09',nome:'Rev. Constitucionalista (SP)',tipo:'Estadual'},
-    {data:'2026-09-07',nome:'Independência do Brasil',tipo:'Nacional'},
-    {data:'2026-10-12',nome:'N. Sra. Aparecida',tipo:'Nacional'},
-    {data:'2026-11-15',nome:'Proclamação da República',tipo:'Nacional'},
-    {data:'2026-12-25',nome:'Natal',tipo:'Nacional'},
-  ],
+  // Começa vazio de propósito: os feriados nacionais e municipais (Cariacica/Vitória) do ano
+  // atual e do seguinte são preenchidos sozinhos por garantirFeriadosAutomaticos(), chamada logo
+  // no início do carregamento do app (ver initPersistence) — por isso nunca ficam desatualizados
+  // de um ano pro outro, sem precisar recadastrar nada manualmente (pedido do administrador em
+  // 2026-10-13). Ver feriadosAutomaticosDoAno() pra lista completa do que é calculado.
+  holidays:[],
   vacations:[],
   suporte:[], // mensagens do chat de Suporte (sugestões/feedback dos colaboradores + respostas do Admin)
   afastamentos:[],
@@ -1513,6 +1512,10 @@ function initPersistence(){
   // "entrar sozinho" (ver #loginSplash). Sem sessão salva, nada muda: formulário normal direto.
   try{if(readSession())showLoginSplash();}catch(e){}
 
+  // Garante os feriados do ano atual/seguinte já em memória antes mesmo de qualquer dado da nuvem
+  // chegar (ver garantirFeriadosAutomaticos) — cobre também o modo totalmente local (sem Firebase).
+  try{garantirFeriadosAutomaticos();}catch(e){}
+
   try{
     if(typeof firebase!=='undefined'&&firebaseConfig&&firebaseConfig.apiKey){
       firebase.initializeApp(firebaseConfig);
@@ -1557,6 +1560,10 @@ function initPersistence(){
         // pra já ir tudo numa só gravação.
         try{autoPreencherPontosEsquecidos();}catch(e){console.warn('Preenchimento automático de ponto falhou:',e&&e.message);}
         try{consolidarRegistrosDuplicados();}catch(e){console.warn('Consolidação de registros duplicados falhou:',e&&e.message);}
+        // Reconfirma os feriados do ano atual/seguinte já DEPOIS da mesclagem com a nuvem (pode ter
+        // trazido feriados de outro aparelho) — o que faltar é adicionado agora, e a gravação logo
+        // abaixo já leva isso pro servidor, sem esperar nenhuma ação manual do Admin.
+        try{garantirFeriadosAutomaticos();}catch(e){console.warn('Atualização automática de feriados falhou:',e&&e.message);}
         // Se a mesclagem trouxe do cache local algo que o servidor ainda não tinha (um ponto batido
         // pouco antes de fechar o app, por exemplo), grava de volta agora — "cura" a diferença sem
         // esperar a próxima ação do usuário.
@@ -2413,6 +2420,66 @@ function consolidarRegistrosDuplicados(){
     });
   });
   if(mudou)saveNow();
+}
+
+/* ===== Feriados calculados automaticamente (nacionais + municipais de Cariacica/Vitória) =====
+   NÃO inclui o feriado estadual do ES (Nossa Senhora da Penha): a data exata não foi confirmada
+   numa fonte oficial (pedido do administrador em 2026-10-13 — deixar de fora por enquanto, pra
+   não arriscar uma data errada afetando cálculo de hora extra/pagamento). Cadastre esse quando a
+   data for confirmada, manualmente, em Feriados → ＋ Manual. */
+// Data da Páscoa (domingo) pro ano dado — algoritmo de Gauss/Meeus-Jones-Butcher, válido pro
+// calendário gregoriano. É a partir dela que os feriados nacionais "móveis" abaixo são calculados.
+function pascoaDoAno(ano){
+  const a=ano%19,b=Math.floor(ano/100),c=ano%100,d=Math.floor(b/4),e=b%4,
+    f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,
+    i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+    mes=Math.floor((h+l-7*m+114)/31),dia=((h+l-7*m+114)%31)+1;
+  return new Date(ano,mes-1,dia);
+}
+function addDiasData(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+// Lista completa dos feriados que o sistema consegue calcular sozinho pro ano dado: nacionais de
+// data fixa, nacionais "móveis" (calculados em cima da Páscoa — Carnaval, Sexta-feira Santa,
+// Corpus Christi; pedido do administrador em 2026-10-13: tratar como feriado normal, mesmo não
+// sendo garantidos por lei federal) e os municipais de Cariacica e Vitória (datas fixas, cada um
+// com a lei municipal que criou o feriado).
+function feriadosAutomaticosDoAno(ano){
+  const p=pascoaDoAno(ano);
+  const fixos=[
+    [`${ano}-01-01`,'Confraternização Universal','Nacional'],
+    [`${ano}-04-21`,'Tiradentes','Nacional'],
+    [`${ano}-05-01`,'Dia do Trabalho','Nacional'],
+    [`${ano}-09-07`,'Independência do Brasil','Nacional'],
+    [`${ano}-10-12`,'N. Sra. Aparecida','Nacional'],
+    [`${ano}-11-02`,'Finados','Nacional'],
+    [`${ano}-11-15`,'Proclamação da República','Nacional'],
+    [`${ano}-11-20`,'Dia Nacional de Zumbi e da Consciência Negra','Nacional'], // Lei 14.759/2023
+    [`${ano}-12-25`,'Natal','Nacional'],
+    [`${ano}-06-24`,'Aniversário de Cariacica (São João Batista)','Municipal'], // Lei Municipal 317/1967
+    [`${ano}-09-08`,'Aniversário de Vitória (N. Sra. da Vitória)','Municipal'], // Lei Municipal 1.732/1967
+  ];
+  const moveis=[[addDiasData(p,-48),'Carnaval (Segunda-feira)'],[addDiasData(p,-47),'Carnaval (Terça-feira)'],
+    [addDiasData(p,-2),'Sexta-feira Santa'],[addDiasData(p,60),'Corpus Christi']]
+    .map(([d,nome])=>[dateKey(d),nome,'Nacional']);
+  return [...fixos,...moveis].map(([data,nome,tipo])=>({data,nome,tipo,auto:true}));
+}
+// Garante que os feriados calculáveis acima, do ano atual e do seguinte, já estejam em
+// state.holidays — une por data (mesma ideia de mergeHolidays), nunca duplica e nunca sobrescreve
+// um feriado que já exista nessa data (inclusive um que o Admin já tenha editado/liberado).
+// Chamada automaticamente ao abrir o app (ver initPersistence) e também manualmente pelo botão
+// "🔄 Sincronizar" da tela Feriados — é isso que faz a lista "se atualizar sozinha" ano após ano,
+// sem precisar recadastrar nada toda virada de ano. Retorna quantos feriados novos foram
+// adicionados.
+function garantirFeriadosAutomaticos(){
+  state.holidays=state.holidays||[];
+  const anoAtual=new Date().getFullYear();
+  const existentes=new Set(state.holidays.map(h=>h.data));
+  let add=0;
+  [anoAtual,anoAtual+1].forEach(ano=>{
+    feriadosAutomaticosDoAno(ano).forEach(f=>{
+      if(!existentes.has(f.data)){state.holidays.push(f);existentes.add(f.data);add++;}
+    });
+  });
+  return add;
 }
 
 // Feriado cadastrado para a data (chave AAAA-MM-DD), ou null
@@ -5113,7 +5180,7 @@ function adminHolidays(){
     <td><span class="badge ${h.tipo==='Nacional'?'b-info':h.tipo==='Estadual'?'b-warn':'b-mut'}">${h.tipo}</span></td>
     <td>${h.liberado?'<span class="badge b-good">Registro liberado</span>':'<span class="badge b-mut">Bloqueado</span>'}</td>
     <td><button class="btn sm ${h.liberado?'danger':'green'}" onclick="toggleLiberado(${i})">${h.liberado?'Bloquear':'Liberar registro'}</button></td></tr>`;}).join('');
-  return `${head('Feriados','Base sincronizada automaticamente — nacionais, estaduais e municipais.',
+  return `${head('Feriados','Nacionais e municipais (Cariacica e Vitória) calculados automaticamente, todo ano.',
     `<button class="btn ghost" onclick="sincronizarFeriados()">🔄 Sincronizar</button>
      <button class="btn primary" onclick="openFeriadoForm()">＋ Manual</button>`)}
   <div class="card"><div class="tbl-wrap"><table>
@@ -5126,9 +5193,9 @@ function toggleLiberado(i){
   render();
   toast('Feriado atualizado',state.holidays[i].nome+': '+(state.holidays[i].liberado?'registro liberado':'bloqueado'),'info');}
 function sincronizarFeriados(){
-  const novos=[{data:'2026-04-21',nome:'Tiradentes',tipo:'Nacional'},{data:'2026-05-01',nome:'Dia do Trabalho',tipo:'Nacional'}];
-  let add=0;novos.forEach(n=>{if(!state.holidays.some(h=>h.data===n.data)){state.holidays.push(n);add++;}});
+  const add=garantirFeriadosAutomaticos();
   render();toast('Base sincronizada',add?`${add} feriado(s) adicionado(s).`:'Base já estava atualizada.','info');
+  if(add)saveNow();
 }
 function openFeriadoForm(){
   openModal({content:`<div class="modal-head"><h3>＋ Feriado manual</h3></div>
